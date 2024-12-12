@@ -37,9 +37,11 @@ export async function handleQuery(query: string, currentFile: string | null): Pr
   } catch (error: any) {
     console.error('Error querying Claude:', error);
     
-    if (error.status === 401 || error.status === 403 || 
-        (error.status === 400 && error.error?.error?.message?.includes('credit balance'))) {
+    if (error.status === 401 || error.status === 403) {
       throw new Error('NEED_NEW_API_KEY');
+    }
+    if (error.status === 400 && error.error?.error?.message?.includes('credit balance')) {
+      throw new Error('INSUFFICIENT_CREDITS');
     }
     
     if (error.status === 429) {
