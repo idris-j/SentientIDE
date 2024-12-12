@@ -1,4 +1,5 @@
 # AI-Powered IDE - Debugging Guide
+###In case you wanna give it a try. Let me know if you are able to solve this.
 
 ## Minimal Setup for WebSocket Debugging
 
