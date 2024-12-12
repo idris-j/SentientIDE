@@ -70,6 +70,18 @@ export function registerRoutes(app: Express): Server {
   });
 
   // API routes
+  app.post('/api/theme', async (req, res) => {
+    const { variant, primary, appearance, radius } = req.body;
+    try {
+      const fs = await import('fs/promises');
+      await fs.writeFile('theme.json', JSON.stringify({ variant, primary, appearance, radius }, null, 2));
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error updating theme:', error);
+      res.status(500).json({ error: 'Failed to update theme' });
+    }
+  });
+
   app.post('/api/analyze', async (req, res) => {
     const { code } = req.body;
     // Mock AI analysis response

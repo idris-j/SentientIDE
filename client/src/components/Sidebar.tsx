@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useTheme } from '@/lib/theme-context';
 import { Button } from '@/components/ui/button';
 import { FileText, Folder, Settings, Moon, Sun, Monitor } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -24,6 +25,7 @@ const demoFiles: FileNode[] = [
 ];
 
 export function Sidebar() {
+  const { theme, setTheme } = useTheme();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
   const [showSettings, setShowSettings] = useState(false);
 
@@ -97,7 +99,10 @@ export function Sidebar() {
             <div className="py-4 space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Theme</label>
-                <Select defaultValue="dark">
+                <Select
+                  defaultValue={theme}
+                  onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select theme" />
                   </SelectTrigger>
