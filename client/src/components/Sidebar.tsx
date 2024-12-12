@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTheme } from '@/lib/theme-context';
 import { Button } from '@/components/ui/button';
@@ -15,23 +15,33 @@ interface FileNode {
   children?: FileNode[];
 }
 
-const demoFiles: FileNode[] = [
-  {
-    name: 'src',
-    type: 'folder',
-    children: [
-      { name: 'main.ts', type: 'file' },
-      { name: 'utils.ts', type: 'file' },
-    ]
-  },
-  { name: 'package.json', type: 'file' },
-  { name: 'project.zip', type: 'file' },
-];
-
 export function Sidebar() {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
+  const [files, setFiles] = useState<FileNode[]>([]);
+
+  const fetchFiles = async () => {
+    try {
+      const response = await fetch('/api/files');
+      if (response.ok) {
+        const fileList = await response.json();
+        setFiles(fileList);
+      } else {
+        throw new Error('Failed to fetch files');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch file list',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchFiles();
+  }, []);
 
   const toggleFolder = (folderName: string) => {
     setExpandedFolders(prev => {
@@ -66,6 +76,9 @@ export function Sidebar() {
         title: 'Success',
         description: 'Project unzipped successfully',
       });
+      
+      // Refresh file list after unzipping
+      fetchFiles();
     } catch (error) {
       toast({
         title: 'Error',
@@ -125,11 +138,11 @@ export function Sidebar() {
       
       <ScrollArea className="flex-1">
         <div className="p-2">
-          {demoFiles.map(file => renderFileTree(file))}
+          {files.map(file => renderFileTree(file))}
         </div>
       </ScrollArea>
 
-      <FileUpload />
+      <FileUpload onUploadSuccess={fetchFiles} />
 
       <div className="p-4 border-t">
         <Dialog>

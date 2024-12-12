@@ -133,6 +133,26 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.get('/api/files', async (_req, res) => {
+    try {
+      const uploadPath = path.join(process.cwd(), 'uploads');
+      const files = await fs.readdir(uploadPath);
+      
+      const fileList = await Promise.all(files.map(async (name) => {
+        const filePath = path.join(uploadPath, name);
+        const stats = await fs.stat(filePath);
+        return {
+          name,
+          type: stats.isDirectory() ? 'folder' : 'file'
+        };
+      }));
+
+      res.json(fileList);
+    } catch (error) {
+      console.error('Error listing files:', error);
+      res.status(500).json({ error: 'Failed to list files' });
+    }
+  });
   app.post('/api/theme', async (req, res) => {
     const { variant, primary, appearance, radius } = req.body;
     try {

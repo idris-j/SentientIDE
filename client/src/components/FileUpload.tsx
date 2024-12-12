@@ -3,7 +3,11 @@ import { Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
-export function FileUpload() {
+interface FileUploadProps {
+  onUploadSuccess?: () => void;
+}
+
+export function FileUpload({ onUploadSuccess }: FileUploadProps) {
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
 
@@ -47,6 +51,8 @@ export function FileUpload() {
         if (event.target) {
           event.target.value = '';
         }
+        // Trigger refresh
+        onUploadSuccess?.();
       } else {
         throw new Error(data.error || 'Failed to upload project');
       }
