@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useWebSocket } from '@/lib/websocket';
+import { useEventSource } from '@/lib/websocket';
 import { useFile } from '@/lib/file-context';
 import { Send, Code, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,14 +24,19 @@ export function AIPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const ws = useWebSocket();
+  const { eventSource, sendMessage } = useEventSource();
   const { currentFile, addFile } = useFile();
 
   useEffect(() => {
-    if (ws) {
+    if (eventSource) {
       const messageHandler = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
+          if (data.type === 'connection') {
+            console.log('SSE connection status:', data.status);
+            return;
+          }
+          
           setMessages(prev => [...prev, {
             id: data.id,
             role: 'assistant',
@@ -53,7 +58,7 @@ export function AIPanel() {
       };
 
       const errorHandler = (error: Event) => {
-        console.error('WebSocket error:', error);
+        console.error('SSE error:', error);
         toast({
           title: 'Connection Error',
           description: 'Lost connection to server. Attempting to reconnect...',
@@ -61,15 +66,15 @@ export function AIPanel() {
         });
       };
 
-      ws.onmessage = messageHandler;
-      ws.onerror = errorHandler;
+      eventSource.onmessage = messageHandler;
+      eventSource.onerror = errorHandler;
 
       return () => {
-        ws.onmessage = null;
-        ws.onerror = null;
+        eventSource.onmessage = null;
+        eventSource.onerror = null;
       };
     }
-  }, [ws, toast]);
+  }, [eventSource, toast]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -81,20 +86,6 @@ export function AIPanel() {
     if (!input.trim()) return;
 
     try {
-      // Wait for WebSocket connection if not ready
-      let retries = 0;
-      const maxRetries = 3;
-      
-      while ((!ws || ws.readyState !== WebSocket.OPEN) && retries < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        retries++;
-      }
-
-      // Final check if WebSocket is connected
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        throw new Error('Unable to establish WebSocket connection. Please refresh the page.');
-      }
-
       const userMessage: Message = {
         id: Date.now().toString(),
         role: 'user',
@@ -107,12 +98,8 @@ export function AIPanel() {
       setInput('');
       setIsLoading(true);
 
-      // Send message through WebSocket
-      ws.send(JSON.stringify({
-        type: 'query',
-        content: input,
-        currentFile,
-      }));
+      // Send message through HTTP POST
+      await sendMessage(input, currentFile);
     } catch (error) {
       console.error('WebSocket error:', error);
       toast({

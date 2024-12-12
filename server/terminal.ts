@@ -4,23 +4,99 @@ import * as os from "os"
 import { log } from "./vite"
 
 interface TerminalSession {
-  pid: number
-  ws: WebSocket
-  pty: pty.IPty
+  pid: number;
+  ws: WebSocket;
+  pty: pty.IPty;
+  lastActivity: number;
 }
 
-const sessions = new Map<WebSocket, TerminalSession>()
+const sessions = new Map<WebSocket, TerminalSession>();
+const MAX_IDLE_TIME = 30 * 60 * 1000; // 30 minutes
+const PING_INTERVAL = 30000; // 30 seconds
+const CLEANUP_INTERVAL = 60000; // 1 minute
+
+let pingInterval: NodeJS.Timeout | null = null;
+let cleanupInterval: NodeJS.Timeout | null = null;
+
+function startIntervals() {
+  if (pingInterval) {
+    clearInterval(pingInterval);
+  }
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+  }
+
+  // Start ping interval
+  pingInterval = setInterval(() => {
+    const now = Date.now();
+    sessions.forEach((session, ws) => {
+      try {
+        if (ws.readyState === WebSocket.OPEN) {
+          session.lastActivity = now;
+          ws.ping();
+        }
+      } catch (error) {
+        log(`Error sending ping: ${error}`, "terminal");
+        cleanupSession(ws);
+      }
+    });
+  }, PING_INTERVAL);
+
+  // Start cleanup interval
+  cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    sessions.forEach((session, ws) => {
+      if (now - session.lastActivity > MAX_IDLE_TIME) {
+        log(`Cleaning up idle terminal session: ${session.pid}`, "terminal");
+        cleanupSession(ws);
+      }
+    });
+  }, CLEANUP_INTERVAL);
+}
+
+function cleanupSession(ws: WebSocket) {
+  const session = sessions.get(ws);
+  if (session) {
+    try {
+      session.pty.kill();
+      sessions.delete(ws);
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    } catch (error) {
+      log(`Error cleaning up session: ${error}`, "terminal");
+    }
+  }
+}
+
+// Cleanup all sessions on process exit
+process.on('exit', () => {
+  sessions.forEach((_, ws) => cleanupSession(ws));
+});
+
+process.on('SIGTERM', () => {
+  sessions.forEach((_, ws) => cleanupSession(ws));
+  process.exit(0);
+});
 
 export function handleTerminal(ws: WebSocket) {
   try {
-    const shell = os.platform() === "win32" ? "powershell.exe" : "bash"
+    log("New terminal connection established", "terminal");
+    
+    // Start ping interval if not already started
+    if (!pingInterval) {
+      startPingInterval();
+    }
+    
+    const shell = os.platform() === "win32" ? "powershell.exe" : "bash";
     const ptyProcess = pty.spawn(shell, [], {
       name: "xterm-256color",
       cols: 80,
       rows: 24,
       cwd: process.env.HOME || process.cwd(),
       env: { ...process.env, TERM: 'xterm-256color' } as { [key: string]: string },
-    })
+      useConpty: os.platform() === "win32",
+    });
 
     const session: TerminalSession = {
       pid: ptyProcess.pid,
@@ -30,6 +106,7 @@ export function handleTerminal(ws: WebSocket) {
 
     sessions.set(ws, session)
     log("Terminal session created", "terminal")
+    startPingInterval();
 
     ptyProcess.onData((data) => {
       try {
@@ -38,18 +115,13 @@ export function handleTerminal(ws: WebSocket) {
         }
       } catch (ex) {
         log(`Error sending terminal data: ${ex}`, "terminal")
+        cleanupSession(ws);
       }
     })
 
     ptyProcess.onExit(({ exitCode, signal }) => {
       log(`Terminal process exited with code ${exitCode} and signal ${signal}`, "terminal")
-      const session = sessions.get(ws)
-      if (session) {
-        sessions.delete(ws)
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close()
-        }
-      }
+      cleanupSession(ws)
     })
 
     ws.on("message", (data) => {
@@ -66,25 +138,18 @@ export function handleTerminal(ws: WebSocket) {
         }
       } catch (ex) {
         log(`Error handling terminal message: ${ex}`, "terminal")
+        cleanupSession(ws);
       }
     })
 
     ws.on("error", (error) => {
       log(`WebSocket error: ${error}`, "terminal")
-      const session = sessions.get(ws)
-      if (session) {
-        session.pty.kill()
-        sessions.delete(ws)
-      }
+      cleanupSession(ws)
     })
 
     ws.on("close", () => {
       log("Terminal WebSocket closed", "terminal")
-      const session = sessions.get(ws)
-      if (session) {
-        session.pty.kill()
-        sessions.delete(ws)
-      }
+      cleanupSession(ws)
     })
 
     // Send initial greeting

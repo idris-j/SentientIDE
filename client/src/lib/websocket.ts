@@ -1,83 +1,84 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-export function useWebSocket() {
-  const [ws, setWs] = useState<WebSocket | null>(null);
+export interface EventSourceMessage {
+  id: string;
+  type: 'text' | 'code' | 'suggestion' | 'explanation' | 'error';
+  content: string;
+  codeLanguage?: string;
+  fileName?: string;
+}
+
+interface EventSourceWithReconnect extends EventSource {
+  reconnectAttempt?: number;
+}
+
+export function useEventSource() {
+  const [eventSource, setEventSource] = useState<EventSourceWithReconnect | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const eventSourceRef = useRef<EventSourceWithReconnect | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const maxRetries = 3;
   const retryCount = useRef(0);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(() => {
     if (isConnecting) return;
 
     try {
       setIsConnecting(true);
 
       // Clean up existing connection
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-        setWs(null);
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setEventSource(null);
       }
 
-      // Create new WebSocket connection
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const socket = new WebSocket(`${protocol}//${window.location.host}/ws/ide`);
-      wsRef.current = socket;
+      // Create new EventSource connection
+      const source = new EventSource('/api/sse') as EventSourceWithReconnect;
+      source.reconnectAttempt = 0;
+      eventSourceRef.current = source;
 
-      return new Promise<WebSocket>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('WebSocket connection timeout'));
-          socket.close();
-        }, 5000);
+      source.onopen = () => {
+        console.log('SSE connected successfully');
+        setEventSource(source);
+        (window as any).aiEventSource = source;
+        retryCount.current = 0;
+        setIsConnecting(false);
+      };
 
-        socket.onopen = () => {
-          clearTimeout(timeout);
-          console.log('WebSocket connected successfully');
-          setWs(socket);
-          (window as any).aiWebSocket = socket;
-          retryCount.current = 0;
-          setIsConnecting(false);
-          resolve(socket);
-        };
+      source.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('SSE message received:', data);
+        } catch (error) {
+          console.error('Error parsing SSE message:', error);
+        }
+      };
 
-        socket.onclose = (event) => {
-          clearTimeout(timeout);
-          console.log('WebSocket disconnected:', event.code, event.reason);
-          setWs(null);
-          (window as any).aiWebSocket = null;
-          setIsConnecting(false);
+      source.onerror = (error) => {
+        console.error('SSE error:', error);
+        source.close();
+        setEventSource(null);
+        setIsConnecting(false);
 
-          if (event.code !== 1000 && event.code !== 1001 && retryCount.current < maxRetries) {
-            const delay = Math.min(1000 * Math.pow(2, retryCount.current), 5000);
-            retryCount.current += 1;
-            console.log(`Attempting reconnection in ${delay}ms (attempt ${retryCount.current})`);
-            
-            reconnectTimeoutRef.current = setTimeout(() => {
-              connect();
-            }, delay);
+        if (retryCount.current < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount.current), 5000);
+          retryCount.current += 1;
+          console.log(`SSE reconnection attempt ${retryCount.current} in ${delay}ms`);
+          
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
           }
-        };
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connect();
+          }, delay);
+        }
+      };
 
-        socket.onerror = (error) => {
-          clearTimeout(timeout);
-          console.error('WebSocket error:', error);
-          setIsConnecting(false);
-          reject(error);
-          socket.close();
-        };
-      });
     } catch (error) {
-      console.error('Error establishing WebSocket connection:', error);
+      console.error('Error establishing SSE connection:', error);
       setIsConnecting(false);
-      
-      if (retryCount.current < maxRetries) {
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connect();
-        }, 2000);
-        retryCount.current += 1;
-      }
     }
   }, [isConnecting]);
 
@@ -88,13 +89,45 @@ export function useWebSocket() {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
-      if (wsRef.current) {
-        wsRef.current.close(1000, 'Component unmounted');
-        wsRef.current = null;
-        setWs(null);
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setEventSource(null);
       }
     };
   }, [connect]);
 
-  return ws;
+  // Function to send messages to the server with retry logic
+  const sendMessage = async (content: string, currentFile: string | null) => {
+    const maxRetries = 3;
+    let attempt = 0;
+
+    while (attempt < maxRetries) {
+      try {
+        const response = await fetch('/api/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ content, currentFile }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to send message: ${response.statusText}`);
+        }
+        
+        return await response.json();
+      } catch (error) {
+        attempt++;
+        if (attempt === maxRetries) {
+          console.error('Error sending message after retries:', error);
+          throw error;
+        }
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt), 5000)));
+      }
+    }
+  };
+
+  return { eventSource, sendMessage };
 }

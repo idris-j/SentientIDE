@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer, WebSocket } from 'ws';
-import { IncomingMessage } from 'http';
+import { IncomingMessage, ServerResponse } from 'http';
+import { WebSocketServer } from 'ws';
 import fileUpload from 'express-fileupload';
 import AdmZip from 'adm-zip';
 import path from 'path';
@@ -9,9 +9,8 @@ import { analyzeCode, handleQuery } from './services/claude';
 import { handleTerminal } from './terminal';
 import fs from 'fs/promises';
 
-interface ExtWebSocket extends WebSocket {
-  isAlive?: boolean;
-}
+// For SSE clients
+const clients = new Set<ServerResponse>();
 
 export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
@@ -21,7 +20,7 @@ export function registerRoutes(app: Express): Server {
     limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
     useTempFiles: true,
     tempFileDir: '/tmp/',
-    debug: false, // Disable debug mode to reduce noise
+    debug: false,
     safeFileNames: true,
     preserveExtension: true,
     abortOnLimit: true,
@@ -40,43 +39,66 @@ export function registerRoutes(app: Express): Server {
     res.status(500).json({ error: 'Internal server error' });
   });
 
-  // Create WebSocket server
-  const wss = new WebSocketServer({ 
+  // SSE endpoint for IDE communication
+  app.get('/api/sse', (req, res) => {
+    // Set SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+
+    // Send initial connection message
+    res.write(`data: ${JSON.stringify({ type: 'connection', status: 'connected' })}\n\n`);
+
+    // Add client to the set
+    clients.add(res);
+    console.log('Client connected to SSE');
+
+    // Handle client disconnection
+    req.on('close', () => {
+      clients.delete(res);
+      console.log('Client disconnected from SSE');
+    });
+  });
+
+  // Endpoint to send messages to the AI
+  app.post('/api/query', async (req, res) => {
+    try {
+      const { content, currentFile } = req.body;
+      if (!content) {
+        return res.status(400).json({ error: 'Content is required' });
+      }
+
+      console.log('Processing query:', { content, currentFile });
+      const response = await handleQuery(content, currentFile);
+      
+      // Broadcast response to all connected clients
+      clients.forEach(client => {
+        try {
+          client.write(`data: ${JSON.stringify(response)}\n\n`);
+        } catch (error) {
+          console.error('Error sending SSE message:', error);
+          clients.delete(client);
+        }
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error processing query:', error);
+      res.status(500).json({ error: 'Failed to process query' });
+    }
+  });
+
+  // Create WebSocket server for terminal connections only
+  const terminalWss = new WebSocketServer({ 
     noServer: true,
     clientTracking: true,
     maxPayload: 50 * 1024 * 1024 // 50MB max payload
   });
 
-  wss.setMaxListeners(20); // Increase max listeners to prevent memory leak warning
-
-  // Initialize ping interval
-  const pingInterval = 30000;
-  let pingTimer: NodeJS.Timeout;
-
-  function heartbeat(this: ExtWebSocket) {
-    this.isAlive = true;
-  }
-
-  function noop() {}
-
-  // Start ping interval
-  function startHeartbeat() {
-    clearInterval(pingTimer);
-    pingTimer = setInterval(() => {
-      wss.clients.forEach((ws: ExtWebSocket) => {
-        if (ws.isAlive === false) {
-          console.log('Client connection dead, terminating');
-          return ws.terminate();
-        }
-        ws.isAlive = false;
-        ws.ping(noop);
-      });
-    }, pingInterval);
-  }
-
-  startHeartbeat();
-
-  // Handle upgrade requests
+  // Handle WebSocket upgrade requests for terminal only
   httpServer.on('upgrade', (request: IncomingMessage, socket, head) => {
     try {
       const protocol = request.headers['x-forwarded-proto'] || 'http';
@@ -89,22 +111,9 @@ export function registerRoutes(app: Express): Server {
         return;
       }
 
-      const handleConnection = (ws: WebSocket) => {
-        const extWs = ws as ExtWebSocket;
-        extWs.isAlive = true;
-
-        if (pathname === '/ws/ide') {
-          console.log('IDE WebSocket connection established');
-          wss.emit('connection', extWs, request);
-        } else if (pathname === '/terminal') {
-          console.log('Terminal connection established');
-          handleTerminal(extWs);
-        }
-      };
-
-      if (pathname === '/ws/ide' || pathname === '/terminal') {
-        console.log(`Handling WebSocket upgrade for path: ${pathname}`);
-        wss.handleUpgrade(request, socket, head, handleConnection);
+      if (pathname === '/terminal') {
+        console.log('Handling terminal WebSocket upgrade');
+        terminalWss.handleUpgrade(request, socket, head, handleTerminal);
       } else {
         console.log(`Invalid WebSocket path: ${pathname}`);
         socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
@@ -117,58 +126,16 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  wss.on('connection', (ws: ExtWebSocket, request: IncomingMessage) => {
-    console.log('WebSocket client connected', {
-      url: request.url,
-      protocol: request.headers['sec-websocket-protocol']
-    });
-
-    ws.isAlive = true;
-    ws.on('pong', heartbeat);
-
-    ws.on('message', async (message) => {
-      try {
-        const data = JSON.parse(message.toString());
-        const { type, content, currentFile } = data;
-        let response;
-
-        if (type === 'analyze') {
-          response = await analyzeCode(content, currentFile);
-        } else if (type === 'query') {
-          response = await handleQuery(content, currentFile);
-        }
-
-        if (ws.readyState === ws.OPEN && response) {
-          ws.send(JSON.stringify(response));
-        }
-      } catch (error) {
-        console.error('Error processing message:', error);
-        if (ws.readyState === ws.OPEN) {
-          ws.send(JSON.stringify({
-            id: Date.now().toString(),
-            type: 'error',
-            content: 'Failed to process message'
-          }));
-        }
-      }
-    });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-      ws.terminate();
-    });
-
-    ws.on('close', (code: number, reason: string) => {
-      console.log(`WebSocket client disconnected with code ${code}${reason ? ` and reason: ${reason}` : ''}`);
-      ws.isAlive = false;
-    });
-    
-    // Clean up when the server closes
-    wss.on('close', () => {
-      clearInterval(pingTimer);
-    });
+  // Terminal WebSocket server error handling
+  terminalWss.on('error', (error) => {
+    console.error('Terminal WebSocket server error:', error);
   });
 
+  terminalWss.on('close', () => {
+    console.log('Terminal WebSocket server closed');
+  });
+
+  // File upload endpoint
   app.post('/api/upload', async (req, res) => {
     try {
       console.log('Upload request received:', req.files);
@@ -181,7 +148,6 @@ export function registerRoutes(app: Express): Server {
       const uploadPath = path.join(process.cwd(), 'uploads');
       
       console.log('Creating upload directory:', uploadPath);
-      // Create uploads directory if it doesn't exist
       await fs.mkdir(uploadPath, { recursive: true });
       
       if (Array.isArray(projectFile)) {
@@ -204,73 +170,40 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post('/api/unzip', async (req, res) => {
-    try {
-      const { filename, destination } = req.body;
-      const zipPath = path.join(process.cwd(), 'uploads', filename);
-      const extractPath = path.join(process.cwd(), destination);
-
-      const zip = new AdmZip(zipPath);
-      zip.extractAllTo(extractPath, true);
-
-      await fs.unlink(zipPath); // Clean up the zip file
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Error unzipping file:', error);
-      res.status(500).json({ error: 'Failed to unzip file' });
-    }
-  });
-
-  app.get('/api/files/content', async (req, res) => {
-    try {
-      const filePath = req.query.path as string;
-      if (!filePath) {
-        return res.status(400).json({ error: 'Path parameter is required' });
-      }
-
-      const absolutePath = path.join(process.cwd(), filePath);
-      const content = await fs.readFile(absolutePath, 'utf-8');
-      res.send(content);
-    } catch (error) {
-      console.error('Error reading file:', error);
-      res.status(500).json({ error: 'Failed to read file' });
-    }
-  });
-
+  // File management endpoints
   app.get('/api/files', async (_req, res) => {
     try {
       const rootPath = process.cwd();
       
       const listFilesRecursive = async (dir: string, baseDir: string = ''): Promise<any[]> => {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const files = await Promise.all(
-      entries.map(async (entry) => {
-        const relativePath = path.join(baseDir, entry.name);
-        const fullPath = path.join(dir, entry.name);
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        const files = await Promise.all(
+          entries.map(async (entry) => {
+            const relativePath = path.join(baseDir, entry.name);
+            const fullPath = path.join(dir, entry.name);
+            
+            if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+              return [];
+            }
+            
+            if (entry.isDirectory()) {
+              const children = await listFilesRecursive(fullPath, relativePath);
+              return {
+                name: entry.name,
+                type: 'folder',
+                children
+              };
+            }
+            
+            return {
+              name: entry.name,
+              type: 'file'
+            };
+          })
+        );
         
-        // Skip node_modules and hidden directories
-        if (entry.name.startsWith('.') || entry.name === 'node_modules') {
-          return [];
-        }
-        
-        if (entry.isDirectory()) {
-          const children = await listFilesRecursive(fullPath, relativePath);
-          return {
-            name: entry.name,
-            type: 'folder',
-            children
-          };
-        }
-        
-        return {
-          name: entry.name,
-          type: 'file'
-        };
-      })
-    );
-    
-    return files.flat();
-  };
+        return files.flat();
+      };
       
       const fileList = await listFilesRecursive(rootPath);
       res.json(fileList);
@@ -278,145 +211,6 @@ export function registerRoutes(app: Express): Server {
       console.error('Error listing files:', error);
       res.status(500).json({ error: 'Failed to list files' });
     }
-  });
-  // File operations
-  app.post('/api/files/delete', async (req, res) => {
-    try {
-      const { paths } = req.body;
-      if (!paths || !Array.isArray(paths)) {
-        return res.status(400).json({ error: 'Paths array is required' });
-      }
-
-      const results = await Promise.all(
-        paths.map(async (filePath) => {
-          try {
-            const absolutePath = path.join(process.cwd(), filePath);
-            await fs.unlink(absolutePath);
-            return { path: filePath, success: true };
-          } catch (err) {
-            return { path: filePath, success: false, error: 'Failed to delete file' };
-          }
-        })
-      );
-
-      const success = results.every(r => r.success);
-      if (success) {
-        res.json({ success: true, results });
-      } else {
-        res.status(500).json({ 
-          error: 'Some files failed to delete', 
-          results 
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting files:', error);
-      res.status(500).json({ error: 'Failed to delete files' });
-    }
-  });
-
-  app.post('/api/files/duplicate', async (req, res) => {
-    try {
-      const { paths } = req.body;
-      if (!paths || !Array.isArray(paths)) {
-        return res.status(400).json({ error: 'Paths array is required' });
-      }
-
-      const results = await Promise.all(
-        paths.map(async (sourcePath) => {
-          try {
-            const sourceAbsolutePath = path.join(process.cwd(), sourcePath);
-            const ext = path.extname(sourcePath);
-            const basename = path.basename(sourcePath, ext);
-            const dir = path.dirname(sourcePath);
-            let newPath = path.join(dir, `${basename}_copy${ext}`);
-            let counter = 1;
-
-            // Handle case where copy already exists
-            let exists = true;
-            while (exists) {
-              try {
-                await fs.access(path.join(process.cwd(), newPath));
-                newPath = path.join(dir, `${basename}_copy_${counter}${ext}`);
-                counter++;
-              } catch {
-                exists = false;
-              }
-            }
-
-            await fs.copyFile(sourceAbsolutePath, path.join(process.cwd(), newPath));
-            return { path: sourcePath, success: true, newPath };
-          } catch (err) {
-            return { path: sourcePath, success: false, error: 'Failed to duplicate file' };
-          }
-        })
-      );
-
-      const success = results.every(r => r.success);
-      if (success) {
-        res.json({ success: true, results });
-      } else {
-        res.status(500).json({
-          error: 'Some files failed to duplicate',
-          results
-        });
-      }
-    } catch (error) {
-      console.error('Error duplicating files:', error);
-      res.status(500).json({ error: 'Failed to duplicate files' });
-    }
-  });
-
-  app.post('/api/files/rename', async (req, res) => {
-    try {
-      const { oldPath, newName } = req.body;
-      if (!oldPath || !newName) {
-        return res.status(400).json({ error: 'Both oldPath and newName are required' });
-      }
-
-      const oldAbsolutePath = path.join(process.cwd(), oldPath);
-      const dir = path.dirname(oldPath);
-      const newPath = path.join(dir, newName);
-      const newAbsolutePath = path.join(process.cwd(), newPath);
-
-      try {
-        await fs.access(newAbsolutePath);
-        return res.status(400).json({ error: 'A file with that name already exists' });
-      } catch {
-        // File doesn't exist, we can proceed with rename
-
-      await fs.rename(oldAbsolutePath, newAbsolutePath);
-        res.json({ success: true, newPath });
-      }
-    } catch (error) {
-      console.error('Error renaming file:', error);
-      res.status(500).json({ error: 'Failed to rename file' });
-    }
-  });
-
-  app.post('/api/theme', async (req, res) => {
-    const { variant, primary, appearance, radius } = req.body;
-    try {
-      const fs = await import('fs/promises');
-      await fs.writeFile('theme.json', JSON.stringify({ variant, primary, appearance, radius }, null, 2));
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Error updating theme:', error);
-      res.status(500).json({ error: 'Failed to update theme' });
-    }
-  });
-
-  app.post('/api/analyze', async (req, res) => {
-    const { code } = req.body;
-    // Mock AI analysis response
-    res.json({
-      suggestions: [
-        {
-          id: Date.now().toString(),
-          type: 'explanation',
-          content: 'This code looks good! Here are some potential improvements...'
-        }
-      ]
-    });
   });
 
   return httpServer;
