@@ -10,6 +10,9 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      fontSize: {
+        "2xs": ["0.65rem", "0.75rem"],
+      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
@@ -50,6 +53,12 @@ export default {
           "3": "hsl(var(--chart-3))",
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
+        },
+        theme: {
+          professional: "hsl(var(--theme-professional))",
+          vibrant: "hsl(var(--theme-vibrant))",
+          minimal: "hsl(var(--theme-minimal))",
+          modern: "hsl(var(--theme-modern))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
