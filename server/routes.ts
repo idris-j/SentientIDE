@@ -8,12 +8,29 @@ export function registerRoutes(app: Express): Server {
   // Create WebSocket server with a specific path
   const wss = new WebSocketServer({ 
     server: httpServer,
-    path: '/ws/ide'
+    path: '/ws/ide',
+    handleProtocols: (protocols, request) => {
+      // Handle vite-hmr protocol
+      if (protocols.includes('vite-hmr')) {
+        return 'vite-hmr';
+      }
+      return protocols[0];
+    }
   });
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, request) => {
+    // Skip handling vite-hmr connections
+    if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
+      return;
+    }
 
     console.log('WebSocket client connected');
+
+    const heartbeat = setInterval(() => {
+      if (ws.readyState === ws.OPEN) {
+        ws.ping();
+      }
+    }, 30000);
 
     ws.on('message', async (message) => {
       try {
@@ -26,14 +43,29 @@ export function registerRoutes(app: Express): Server {
           content: `Here's a suggestion for improving your code: Consider using const instead of let for values that won't be reassigned.`
         };
 
-        ws.send(JSON.stringify(response));
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify(response));
+        }
       } catch (error) {
         console.error('Error processing message:', error);
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({
+            id: Date.now().toString(),
+            type: 'error',
+            content: 'Failed to process message'
+          }));
+        }
       }
     });
 
     ws.on('close', () => {
       console.log('WebSocket client disconnected');
+      clearInterval(heartbeat);
+    });
+
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+      clearInterval(heartbeat);
     });
   });
 
