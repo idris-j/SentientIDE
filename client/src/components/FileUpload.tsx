@@ -14,9 +14,13 @@ export function FileUpload() {
     if (!file.name.endsWith('.zip')) {
       toast({
         title: 'Invalid file type',
-        description: 'Please upload a zip file',
+        description: 'Only .zip files are supported. Please compress your project folder into a .zip file before uploading.',
         variant: 'destructive',
       });
+      // Reset the input
+      if (event.target) {
+        event.target.value = '';
+      }
       return;
     }
 
@@ -60,22 +64,27 @@ export function FileUpload() {
 
   return (
     <div className="px-4 py-2 border-t">
-      <Button 
-        variant="outline" 
-        className="w-full justify-start gap-2"
-        disabled={uploading}
-        onClick={() => document.getElementById('file-upload')?.click()}
-      >
-        <Upload size={16} />
-        {uploading ? 'Uploading...' : 'Upload Project'}
-      </Button>
-      <input
-        type="file"
-        id="file-upload"
-        className="hidden"
-        accept=".zip"
-        onChange={handleFileUpload}
-      />
+      <div className="space-y-2">
+        <Button 
+          variant="outline" 
+          className="w-full justify-start gap-2"
+          disabled={uploading}
+          onClick={() => document.getElementById('file-upload')?.click()}
+        >
+          <Upload size={16} />
+          {uploading ? 'Uploading...' : 'Upload Project (.zip)'}
+        </Button>
+        <p className="text-xs text-muted-foreground px-2">
+          Only .zip files are supported
+        </p>
+        <input
+          type="file"
+          id="file-upload"
+          className="hidden"
+          accept=".zip"
+          onChange={handleFileUpload}
+        />
+      </div>
     </div>
   );
 }
