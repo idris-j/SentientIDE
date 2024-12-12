@@ -1,6 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer } from 'ws';
+import fileUpload from 'express-fileupload';
+import AdmZip from 'adm-zip';
+import path from 'path';
+import fs from 'fs/promises';
 
 export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
@@ -67,6 +71,49 @@ export function registerRoutes(app: Express): Server {
       console.error('WebSocket error:', error);
       clearInterval(heartbeat);
     });
+  // File upload endpoint
+  app.use(fileUpload({
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+  }));
+
+  app.post('/api/upload', async (req, res) => {
+    try {
+      if (!req.files || !req.files.project) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const projectFile = req.files.project;
+      const uploadPath = path.join(process.cwd(), 'uploads');
+      
+      // Create uploads directory if it doesn't exist
+      await fs.mkdir(uploadPath, { recursive: true });
+      
+      const filePath = path.join(uploadPath, projectFile.name);
+      await projectFile.mv(filePath);
+
+      res.json({ success: true, filename: projectFile.name });
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      res.status(500).json({ error: 'Failed to upload file' });
+    }
+  });
+
+  app.post('/api/unzip', async (req, res) => {
+    try {
+      const { filename, destination } = req.body;
+      const zipPath = path.join(process.cwd(), 'uploads', filename);
+      const extractPath = path.join(process.cwd(), destination);
+
+      const zip = new AdmZip(zipPath);
+      zip.extractAllTo(extractPath, true);
+
+      await fs.unlink(zipPath); // Clean up the zip file
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error unzipping file:', error);
+      res.status(500).json({ error: 'Failed to unzip file' });
+    }
+  });
   });
 
   // API routes

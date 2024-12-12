@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button';
 import { FileText, Folder, Settings, Moon, Sun, Monitor } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { useToast } from '@/hooks/use-toast';
+import { FileUpload } from './FileUpload';
 
 interface FileNode {
   name: string;
@@ -22,12 +25,13 @@ const demoFiles: FileNode[] = [
     ]
   },
   { name: 'package.json', type: 'file' },
+  { name: 'project.zip', type: 'file' },
 ];
 
 export function Sidebar() {
+  const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
-  const [showSettings, setShowSettings] = useState(false);
 
   const toggleFolder = (folderName: string) => {
     setExpandedFolders(prev => {
@@ -41,6 +45,36 @@ export function Sidebar() {
     });
   };
 
+  const handleUnzip = async (filename: string) => {
+    try {
+      const response = await fetch('/api/unzip', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename,
+          destination: '.', // Extract to current directory
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to unzip file');
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Project unzipped successfully',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to unzip project',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const renderFileTree = (node: FileNode, depth = 0, path = '') => {
     const Icon = node.type === 'folder' ? Folder : FileText;
     const currentPath = path ? `${path}/${node.name}` : node.name;
@@ -48,21 +82,32 @@ export function Sidebar() {
     
     return (
       <div key={currentPath}>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2 font-normal hover:bg-accent"
-          style={{ paddingLeft: `${depth * 1.5}rem` }}
-          onClick={() => node.type === 'folder' && toggleFolder(currentPath)}
-        >
-          {node.type === 'folder' && (
-            <div className="w-4 h-4 flex items-center justify-center">
-              {isExpanded ? '▼' : '▶'}
-            </div>
-          )}
-          <Icon size={16} />
-          {node.name}
-        </Button>
+        <ContextMenu>
+          <ContextMenuTrigger>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 font-normal hover:bg-accent"
+              style={{ paddingLeft: `${depth * 1.5}rem` }}
+              onClick={() => node.type === 'folder' && toggleFolder(currentPath)}
+            >
+              {node.type === 'folder' && (
+                <div className="w-4 h-4 flex items-center justify-center">
+                  {isExpanded ? '▼' : '▶'}
+                </div>
+              )}
+              <Icon size={16} />
+              {node.name}
+            </Button>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            {node.name.endsWith('.zip') && (
+              <ContextMenuItem onClick={() => handleUnzip(node.name)}>
+                Extract Here
+              </ContextMenuItem>
+            )}
+          </ContextMenuContent>
+        </ContextMenu>
         {node.type === 'folder' && isExpanded && (
           <div>
             {node.children?.map(child => renderFileTree(child, depth + 1, currentPath))}
@@ -83,6 +128,8 @@ export function Sidebar() {
           {demoFiles.map(file => renderFileTree(file))}
         </div>
       </ScrollArea>
+
+      <FileUpload />
 
       <div className="p-4 border-t">
         <Dialog>
