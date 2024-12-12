@@ -41,18 +41,26 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         const presets = {
           professional: {
             primary: effectiveTheme === 'light' ? 'hsl(210 100% 50%)' : 'hsl(210 100% 60%)',
+            secondary: effectiveTheme === 'light' ? 'hsl(210 40% 96%)' : 'hsl(210 40% 24%)',
+            accent: effectiveTheme === 'light' ? 'hsl(210 40% 90%)' : 'hsl(210 40% 30%)',
             radius: 0.75
           },
           vibrant: {
             primary: effectiveTheme === 'light' ? 'hsl(280 100% 60%)' : 'hsl(280 100% 70%)',
+            secondary: effectiveTheme === 'light' ? 'hsl(280 70% 96%)' : 'hsl(280 70% 24%)',
+            accent: effectiveTheme === 'light' ? 'hsl(280 70% 90%)' : 'hsl(280 70% 30%)',
             radius: 1
           },
           minimal: {
             primary: effectiveTheme === 'light' ? 'hsl(0 0% 30%)' : 'hsl(0 0% 70%)',
+            secondary: effectiveTheme === 'light' ? 'hsl(0 0% 96%)' : 'hsl(0 0% 24%)',
+            accent: effectiveTheme === 'light' ? 'hsl(0 0% 90%)' : 'hsl(0 0% 30%)',
             radius: 0.25
           },
           modern: {
             primary: effectiveTheme === 'light' ? 'hsl(160 100% 45%)' : 'hsl(160 100% 55%)',
+            secondary: effectiveTheme === 'light' ? 'hsl(160 70% 96%)' : 'hsl(160 70% 24%)',
+            accent: effectiveTheme === 'light' ? 'hsl(160 70% 90%)' : 'hsl(160 70% 30%)',
             radius: 0.5
           }
         };
@@ -65,6 +73,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({
             variant,
             primary: presets[variant].primary,
+            secondary: presets[variant].secondary,
+            accent: presets[variant].accent,
             appearance: theme,
             radius: presets[variant].radius,
           }),
