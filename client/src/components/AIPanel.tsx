@@ -204,26 +204,49 @@ export function AIPanel() {
       setIsLoading(true);
 
       try {
-        // Send message through HTTP POST
-        await sendMessage(input, currentFile);
+        const result = await sendMessage(input, currentFile);
+        if (!result.success && result.needNewKey) {
+          // Show toast notification for API key issue
+          toast({
+            title: 'API Key Required',
+            description: 'The AI service needs a valid API key. Please ask an administrator to update the configuration.',
+            variant: 'destructive',
+            duration: 5000,
+          });
+          
+          // Add system message to chat
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'assistant',
+            type: 'error',
+            content: 'The AI service requires a valid API key. Please contact an administrator to resolve this issue.'
+          }]);
+          return;
+        }
       } catch (error: any) {
         console.error('AI Service error:', error);
+        
+        const errorMessage = error.response?.data?.error || 
+                           'Failed to get response from AI. Please try again later.';
         
         // Add error message to chat
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'assistant',
           type: 'error',
-          content: error.response?.data?.error || 
-                  'Failed to get response from AI. Please try again later.'
+          content: errorMessage
         }]);
         
-        // Show toast notification
+        // Show appropriate toast notification based on error type
+        const toastMessage = error.response?.status === 429 ? 
+          'Too many requests. Please wait a moment before trying again.' :
+          errorMessage;
+        
         toast({
           title: 'AI Service Error',
-          description: error.response?.data?.error || 
-                      'Failed to get response from AI. Please try again later.',
+          description: toastMessage,
           variant: 'destructive',
+          duration: error.response?.status === 429 ? 3000 : 5000,
         });
       } finally {
         setIsLoading(false);

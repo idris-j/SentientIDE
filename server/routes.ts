@@ -227,11 +227,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('Processing query:', { content, currentFile });
-      const response = await handleQuery(content, currentFile);
       
-      // Check if it's an error response
-      if (response.type === 'error') {
-        // Still send the error message through SSE for real-time feedback
+      try {
+        const response = await handleQuery(content, currentFile);
+        
+        // Broadcast response to all connected clients
         clients.forEach(client => {
           try {
             client.write(`data: ${JSON.stringify(response)}\n\n`);
@@ -240,23 +240,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
             clients.delete(client);
           }
         });
-        
-        // Send appropriate status code based on error
-        return res.status(response.content.includes('account limits') ? 402 : 500)
-          .json({ error: response.content });
-      }
-      
-      // Broadcast success response to all connected clients
-      clients.forEach(client => {
-        try {
-          client.write(`data: ${JSON.stringify(response)}\n\n`);
-        } catch (error) {
-          console.error('Error sending SSE message:', error);
-          clients.delete(client);
-        }
-      });
 
-      res.json({ success: true });
+        // Send success response for non-error messages
+        if (response.type !== 'error') {
+          return res.json({ success: true });
+        }
+        
+        // Handle error responses with appropriate status codes
+        const statusCode = response.content.includes('rate limit') ? 429 :
+                         response.content.includes('authentication') ? 401 :
+                         response.content.includes('invalid request') ? 400 : 500;
+                         
+        return res.status(statusCode).json({ error: response.content });
+        
+      } catch (error) {
+        if (error instanceof Error && error.message === 'NEED_NEW_API_KEY') {
+          return res.status(401).json({
+            error: 'API key invalid or expired',
+            needNewKey: true
+          });
+        }
+        throw error; // Re-throw other errors to be caught by outer catch
+      }
     } catch (error) {
       console.error('Error processing query:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to process query';

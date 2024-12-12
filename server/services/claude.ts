@@ -42,6 +42,15 @@ export async function analyzeCode(code: string, fileName: string): Promise<Messa
 }
 
 export async function handleQuery(query: string, currentFile: string | null): Promise<Message> {
+  // Check if API key is configured
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      id: Date.now().toString(),
+      type: 'error',
+      content: 'Anthropic API key is not configured. Please check your environment variables.'
+    };
+  }
+
   try {
     const response = await anthropic.messages.create({
       model: 'claude-3-opus-20240229',
@@ -57,21 +66,35 @@ export async function handleQuery(query: string, currentFile: string | null): Pr
       type: 'text',
       content: response.content[0].text || 'No response received from AI'
     };
-  } catch (error) {
+  } catch (error: any) { // Using any here because Anthropic's error types are not fully defined
     console.error('Error querying Claude:', error);
     
     // Handle specific API errors
-    if (error.status === 400 && error.error?.error?.message?.includes('credit balance')) {
+    if (error.status === 400) {
+      if (error.error?.error?.message?.includes('credit balance')) {
+        console.log('Credit balance error detected, asking for API key');
+        // Trigger API key request
+        throw new Error('NEED_NEW_API_KEY');
+      }
       return {
         id: Date.now().toString(),
         type: 'error',
-        content: 'The AI service is currently unavailable due to account limits. Please try again later.'
+        content: 'Invalid request to AI service. Please try a different query.'
       };
     } else if (error.status === 401 || error.status === 403) {
+      console.log('Authentication error detected, asking for API key');
+      throw new Error('NEED_NEW_API_KEY');
+    } else if (error.status === 429) {
       return {
         id: Date.now().toString(),
         type: 'error',
-        content: 'Authentication error with the AI service. Please check your API key configuration.'
+        content: 'Rate limit reached. Please wait a moment before trying again.'
+      };
+    } else if (error.status >= 500) {
+      return {
+        id: Date.now().toString(),
+        type: 'error',
+        content: 'AI service is experiencing issues. Please try again later.'
       };
     }
     
