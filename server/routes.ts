@@ -402,8 +402,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const filePath = path.join(process.cwd(), name);
       await fs.writeFile(filePath, '', 'utf-8');
-
-      res.json({ path: name });
+      
+      // Return empty content with the path
+      res.json({ path: name, content: '' });
     } catch (error) {
       console.error('Error creating file:', error);
       res.status(500).json({ error: 'Failed to create file' });
