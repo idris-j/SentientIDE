@@ -81,7 +81,7 @@ export function Sidebar() {
         throw new Error(data.error || 'Failed to delete files');
       }
 
-      const failedFiles = data.results?.filter(r => !r.success) || [];
+      const failedFiles = data.results?.filter((r: { success: boolean }) => !r.success) || [];
       if (failedFiles.length > 0) {
         toast({
           title: 'Warning',
@@ -91,12 +91,15 @@ export function Sidebar() {
       } else {
         toast({
           title: 'Success',
-          description: `${paths.length} file(s) deleted successfully`,
+          description: paths.length === 1 
+            ? 'File deleted successfully'
+            : `${paths.length} files deleted successfully`,
         });
       }
       
       fetchFiles();
       setSelectedFiles(new Set());
+      setCurrentFile(null);
     } catch (error) {
       toast({
         title: 'Error',
@@ -124,7 +127,7 @@ export function Sidebar() {
         throw new Error(data.error || 'Failed to duplicate files');
       }
 
-      const failedFiles = data.results?.filter(r => !r.success) || [];
+      const failedFiles = data.results?.filter((r: { success: boolean }) => !r.success) || [];
       if (failedFiles.length > 0) {
         toast({
           title: 'Warning',
@@ -134,11 +137,14 @@ export function Sidebar() {
       } else {
         toast({
           title: 'Success',
-          description: `${paths.length} file(s) duplicated successfully`,
+          description: paths.length === 1 
+            ? 'File duplicated successfully'
+            : `${paths.length} files duplicated successfully`,
         });
       }
       
       fetchFiles();
+      setSelectedFiles(new Set());
     } catch (error) {
       toast({
         title: 'Error',
@@ -305,44 +311,51 @@ export function Sidebar() {
                 {node.name}
               </Button>
               {fileToRename?.path === fullPath && (
-                <div className="absolute left-0 right-0 z-50">
-                  <div className="relative mx-2 mt-2 rounded-md border bg-popover p-4 shadow-md">
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-sm">Rename {fileToRename.name}</h4>
-                      <Input
-                        id="name"
-                        value={newFileName}
-                        onChange={(e) => setNewFileName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleRenameSubmit();
-                          } else if (e.key === 'Escape') {
-                            setFileToRename(null);
-                          }
-                        }}
-                        placeholder="Enter new name"
-                        className="h-8"
-                        autoFocus
-                      />
+                <Popover open={true} onOpenChange={() => setFileToRename(null)}>
+                  <PopoverContent
+                    className="w-80"
+                    align="start"
+                    side="bottom"
+                    sideOffset={5}
+                  >
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-sm leading-none">Rename {fileToRename.name}</h4>
+                        <Input
+                          id="name"
+                          value={newFileName}
+                          onChange={(e) => setNewFileName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleRenameSubmit();
+                            } else if (e.key === 'Escape') {
+                              setFileToRename(null);
+                            }
+                          }}
+                          placeholder="Enter new name"
+                          className="h-8"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setFileToRename(null)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          size="sm"
+                          onClick={handleRenameSubmit}
+                        >
+                          Rename
+                        </Button>
+                      </div>
                     </div>
-                    <div className="mt-3 flex justify-end gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setFileToRename(null)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button 
-                        size="sm"
-                        onClick={handleRenameSubmit}
-                      >
-                        Rename
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                  </PopoverContent>
+                </Popover>
               )}
             </div>
           </ContextMenuTrigger>
@@ -351,10 +364,10 @@ export function Sidebar() {
               // Multiple files selected
               <>
                 <ContextMenuItem onClick={() => handleDuplicate(Array.from(selectedFiles))}>
-                  Duplicate Selected Files
+                  Duplicate ({selectedFiles.size} items)
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => handleDelete(Array.from(selectedFiles))}>
-                  Delete Selected Files
+                <ContextMenuItem onClick={() => handleDelete(Array.from(selectedFiles))} className="text-destructive">
+                  Delete ({selectedFiles.size} items)
                 </ContextMenuItem>
               </>
             ) : (
@@ -368,7 +381,7 @@ export function Sidebar() {
                 <ContextMenuItem onClick={() => handleDuplicate(fullPath)}>
                   Duplicate
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => handleDelete(fullPath)}>
+                <ContextMenuItem onClick={() => handleDelete(fullPath)} className="text-destructive">
                   Delete
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => handleRename(fullPath, node.type)}>
