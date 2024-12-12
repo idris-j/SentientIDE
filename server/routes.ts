@@ -47,16 +47,53 @@ export function registerRoutes(app: Express): Server {
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message.toString());
-        
-        // Mock AI response for now
-        const response = {
-          id: Date.now().toString(),
-          type: 'suggestion',
-          content: `Here's a suggestion for improving your code: Consider using const instead of let for values that won't be reassigned.`
-        };
+        const { type, content, currentFile } = data;
 
-        if (ws.readyState === ws.OPEN) {
-          ws.send(JSON.stringify(response));
+        if (type === 'query') {
+          // For now, provide mock responses based on query content
+          let response;
+          
+          if (content.toLowerCase().includes('improve') || content.toLowerCase().includes('suggest')) {
+            response = {
+              id: Date.now().toString(),
+              type: 'suggestion',
+              content: `// Here's an improved version of your code:
+function improvedFunction() {
+  const result = [];
+  // Add your implementation here
+  return result;
+}`,
+              fileName: currentFile,
+              codeLanguage: 'typescript'
+            };
+          } else if (content.toLowerCase().includes('explain')) {
+            response = {
+              id: Date.now().toString(),
+              type: 'explanation',
+              content: 'This code implements a function that processes data efficiently by using modern JavaScript features like array methods and proper type safety.',
+            };
+          } else if (content.toLowerCase().includes('code') || content.toLowerCase().includes('example')) {
+            response = {
+              id: Date.now().toString(),
+              type: 'code',
+              content: `function exampleCode() {
+  // This is an example implementation
+  const data = [];
+  return data;
+}`,
+              codeLanguage: 'typescript'
+            };
+          } else {
+            response = {
+              id: Date.now().toString(),
+              type: 'text',
+              content: "I can help you with code suggestions, explanations, and examples. Try asking me to improve your code, explain a concept, or show an example.",
+            };
+          }
+
+          if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify(response));
+          }
         }
       } catch (error) {
         console.error('Error processing message:', error);

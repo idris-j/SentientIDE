@@ -1,30 +1,130 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useWebSocket } from '@/lib/websocket';
+import { useFile } from '@/lib/file-context';
+import { Send, Code, Copy, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
-interface Suggestion {
+interface Message {
   id: string;
-  type: 'suggestion' | 'explanation';
+  role: 'user' | 'assistant';
+  type: 'text' | 'code' | 'suggestion' | 'explanation';
   content: string;
+  codeLanguage?: string;
+  fileName?: string;
 }
 
 export function AIPanel() {
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
   const ws = useWebSocket();
+  const { currentFile, addFile } = useFile();
 
   useEffect(() => {
     if (ws) {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        setSuggestions(prev => [...prev, data]);
+        setMessages(prev => [...prev, {
+          id: data.id,
+          role: 'assistant',
+          type: data.type,
+          content: data.content,
+          codeLanguage: data.codeLanguage,
+          fileName: data.fileName
+        }]);
+        setIsLoading(false);
       };
     }
   }, [ws]);
 
-  const applySuggestion = (suggestion: Suggestion) => {
-    // Implement suggestion application logic
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || !ws) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      type: 'text',
+      content: input
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+
+    // Send message through WebSocket
+    ws.send(JSON.stringify({
+      type: 'query',
+      content: input,
+      currentFile,
+    }));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const applySuggestion = async (suggestion: Message) => {
+    if (!suggestion.fileName) return;
+
+    try {
+      const editor = (window as any).monaco?.editor
+        .getModels()
+        .find((model: any) => model.uri.path === suggestion.fileName);
+
+      if (editor) {
+        editor.pushEditOperations(
+          [],
+          [{
+            range: editor.getFullModelRange(),
+            text: suggestion.content
+          }],
+          () => null
+        );
+
+        toast({
+          title: 'Success',
+          description: 'Code changes applied successfully',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to apply code changes',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const copyToClipboard = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast({
+        title: 'Success',
+        description: 'Copied to clipboard',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to copy to clipboard',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -33,24 +133,80 @@ export function AIPanel() {
         <h2 className="text-lg font-semibold">AI Assistant</h2>
       </div>
       
-      <ScrollArea className="h-[calc(100%-4rem)] rounded-none">
-        <div className="p-4 space-y-4">
-          {suggestions.map((suggestion) => (
-            <Card key={suggestion.id} className="p-4 bg-card hover:bg-card/80 transition-colors">
-              <p className="text-sm mb-2">{suggestion.content}</p>
-              {suggestion.type === 'suggestion' && (
-                <Button 
-                  size="sm" 
-                  variant="default"
-                  onClick={() => applySuggestion(suggestion)}
-                >
-                  Apply Suggestion
-                </Button>
-              )}
-            </Card>
-          ))}
+      <div className="flex flex-col h-[calc(100%-8rem)]">
+        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+          <div className="space-y-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={cn(
+                  "flex w-max max-w-[80%] flex-col gap-2 rounded-lg px-3 py-2 text-sm",
+                  message.role === 'user'
+                    ? "ml-auto bg-primary text-primary-foreground"
+                    : "bg-muted"
+                )}
+              >
+                {message.type === 'code' || message.type === 'suggestion' ? (
+                  <div className="relative">
+                    <pre className="overflow-x-auto p-2 rounded bg-muted-foreground/5">
+                      <code>{message.content}</code>
+                    </pre>
+                    <div className="absolute top-2 right-2 flex gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => copyToClipboard(message.content)}
+                        className="h-6 w-6"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      {message.type === 'suggestion' && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => applySuggestion(message)}
+                          className="h-6 w-6"
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm">{message.content}</div>
+                )}
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex gap-2 text-muted-foreground">
+                <div className="animate-pulse">●</div>
+                <div className="animate-pulse animation-delay-200">●</div>
+                <div className="animate-pulse animation-delay-400">●</div>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        <div className="p-4 border-t">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Ask me anything about your code..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading}
+              className="flex-1"
+            />
+            <Button
+              onClick={handleSend}
+              disabled={isLoading || !input.trim()}
+              size="icon"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </ScrollArea>
+      </div>
     </Card>
   );
 }
