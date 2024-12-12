@@ -10,7 +10,7 @@ export function TabsView() {
   
   if (!openFiles?.length) {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
         Select a file to edit
       </div>
     );
@@ -20,7 +20,7 @@ export function TabsView() {
     <Tabs
       value={currentFile || undefined}
       onValueChange={setCurrentFile}
-      className="h-full flex flex-col"
+      className="flex-1 flex flex-col"
     >
       <div className="border-b px-1 bg-background">
         <TabsList className="h-10 w-full justify-start gap-1 bg-transparent p-0">
@@ -50,15 +50,17 @@ export function TabsView() {
           ))}
         </TabsList>
       </div>
-      {openFiles.map((file) => (
-        <TabsContent
-          key={file}
-          value={file}
-          className="flex-1 h-full data-[state=inactive]:hidden"
-        >
-          <CodeEditor filePath={file} />
-        </TabsContent>
-      ))}
+      <div className="flex-1 relative">
+        {openFiles.map((file) => (
+          <TabsContent
+            key={file}
+            value={file}
+            className="absolute inset-0 data-[state=inactive]:hidden"
+          >
+            <CodeEditor filePath={file} />
+          </TabsContent>
+        ))}
+      </div>
     </Tabs>
   );
 }

@@ -224,7 +224,7 @@ export function Sidebar() {
     }
 
     if (nodeType === 'file') {
-      setCurrentFile(filePath);
+      addFile(filePath);
     }
   };
 
