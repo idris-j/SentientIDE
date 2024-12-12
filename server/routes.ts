@@ -223,9 +223,15 @@ export function registerRoutes(app: Express): Server {
       let counter = 1;
 
       // Handle case where copy already exists
-      while (fs.existsSync(path.join(process.cwd(), newPath))) {
-        newPath = path.join(dir, `${basename}_copy_${counter}${ext}`);
-        counter++;
+      let exists = true;
+      while (exists) {
+        try {
+          await fs.access(path.join(process.cwd(), newPath));
+          newPath = path.join(dir, `${basename}_copy_${counter}${ext}`);
+          counter++;
+        } catch {
+          exists = false;
+        }
       }
 
       await fs.copyFile(sourceAbsolutePath, path.join(process.cwd(), newPath));
