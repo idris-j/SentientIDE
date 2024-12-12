@@ -4,17 +4,19 @@ export function useWebSocket() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 10; // Increased max attempts
-  const baseReconnectDelay = 1000;
+  const maxReconnectAttempts = 10;
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
 
   const connect = useCallback(() => {
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      if (wsRef.current?.readyState === WebSocket.CONNECTING) {
-        return; // Don't create a new connection if one is pending
+      // Clear any existing connection
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
 
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const socket = new WebSocket(`${protocol}//${window.location.host}/ws/ide`);
       wsRef.current = socket;
 
@@ -23,7 +25,6 @@ export function useWebSocket() {
         setIsConnected(true);
         reconnectAttempts.current = 0;
         setWs(socket);
-        // Store the WebSocket instance globally for the editor to use
         (window as any).aiWebSocket = socket;
       };
 
@@ -44,14 +45,20 @@ export function useWebSocket() {
       socket.onclose = (event) => {
         console.log('WebSocket disconnected', event.code, event.reason);
         setIsConnected(false);
+        setWs(null);
         (window as any).aiWebSocket = null;
+
+        // Clear any existing reconnection timeout
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
 
         // Implement exponential backoff for reconnection
         if (reconnectAttempts.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
           reconnectAttempts.current++;
           
-          setTimeout(() => {
+          reconnectTimeoutRef.current = setTimeout(() => {
             if (!isConnected) {
               connect();
             }
@@ -59,10 +66,19 @@ export function useWebSocket() {
         }
       };
 
-      setWs(socket);
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        // Close the socket on error to trigger reconnection
+        socket.close();
+      };
+
     } catch (error) {
       console.error('Error creating WebSocket connection:', error);
       setIsConnected(false);
+      setWs(null);
+      
+      // Attempt to reconnect after error
+      reconnectTimeoutRef.current = setTimeout(connect, 2000);
     }
   }, [isConnected]);
 
@@ -70,12 +86,17 @@ export function useWebSocket() {
     connect();
 
     return () => {
-      if (ws) {
-        ws.close();
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
       }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      setWs(null);
+      setIsConnected(false);
     };
   }, [connect]);
 
-  // Provide both the WebSocket instance and connection state
   return ws;
 }

@@ -40,22 +40,12 @@ export function registerRoutes(app: Express): Server {
   }));
 
   // Create WebSocket server
-  const wss = new WebSocketServer({ noServer: true });
-
-  // Handle upgrade requests
-  httpServer.on('upgrade', (request, socket, head) => {
-    if (request.url === '/ws/ide') {
+  const wss = new WebSocketServer({ 
+    server: httpServer,
+    path: '/ws/ide',
+    verifyClient: (info) => {
       // Skip vite-hmr protocol
-      if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
-        socket.destroy();
-        return;
-      }
-      
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit('connection', ws, request);
-      });
-    } else {
-      socket.destroy();
+      return info.req.headers['sec-websocket-protocol'] !== 'vite-hmr';
     }
   });
 
