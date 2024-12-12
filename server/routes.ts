@@ -35,7 +35,7 @@ async function findAvailablePort(startPort: number, maxAttempts: number = 10): P
   throw new Error('No available ports found');
 }
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
   const startPort = process.env.PORT ? parseInt(process.env.PORT) : 5000;
 
@@ -75,27 +75,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Simple server startup with port handling
-  const port = process.env.PORT ? parseInt(process.env.PORT) : 5000;
-  console.log(`Starting server on port ${port}`);
-
-  try {
-    httpServer.on('error', (error: any) => {
-      if (error.code === 'EADDRINUSE') {
-        console.error(`Port ${port} is already in use`);
-      } else {
-        console.error('Server error:', error);
-      }
-    });
-
-    httpServer.on('listening', () => {
-      console.log(`Server started successfully on port ${port}`);
-      console.log('Server initialization completed');
-    });
-
-    httpServer.listen(port);
-  } catch (error) {
-    console.error('Failed to start server:', error);
-  }
+  // Return the server instance for proper initialization in index.ts
+  return httpServer;
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
@@ -406,27 +387,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await fs.access(filePath);
         return res.status(409).json({ error: 'File already exists' });
       } catch {
-        // File doesn't exist, we can proceed
+        // File doesn't exist, proceed with creation
       }
 
-      // Create empty file with explicit empty string
-      const emptyContent = '';
-      await fs.writeFile(filePath, emptyContent, { encoding: 'utf-8', flag: 'wx' });
-
-      // Double-check the file is empty
-      const content = await fs.readFile(filePath, 'utf-8');
-      if (content !== emptyContent) {
-        // If somehow not empty, truncate it
-        await fs.truncate(filePath, 0);
+      try {
+        // First, ensure the directory exists
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        
+        // Create a new file handler with exclusive write flag
+        const fileHandle = await fs.open(filePath, 'wx');
+        
+        try {
+          // Close the file immediately after creation to ensure it's empty
+          await fileHandle.close();
+          
+          // Verify the file exists and is empty
+          const stats = await fs.stat(filePath);
+          if (stats.size !== 0) {
+            // If somehow not empty, truncate it
+            await fs.truncate(filePath, 0);
+          }
+          
+          console.log(`Created new empty file: ${safeName}`);
+          res.json({
+            success: true,
+            path: safeName,
+            content: ''
+          });
+        } catch (closeError) {
+          // If we fail during verification/closing, try to remove the file
+          await fs.unlink(filePath).catch(console.error);
+          throw closeError;
+        }
+      } catch (writeError) {
+        if ((writeError as NodeJS.ErrnoException).code === 'EEXIST') {
+          return res.status(409).json({ error: 'File already exists' });
+        }
+        throw writeError;
       }
-
-      console.log(`Created new empty file: ${safeName}`);
-      res.json({
-        success: true,
-        path: safeName,
-        content: emptyContent
-      });
-
     } catch (error) {
       console.error('Error creating file:', error);
       res.status(500).json({

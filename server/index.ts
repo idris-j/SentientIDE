@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, log } from "./vite";
 
 const app = express();
 app.use(express.json());
@@ -37,31 +37,37 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
+// Error handling middleware
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  res.status(status).json({ message });
+});
+
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+
+// Initialize server asynchronously
+async function startServer() {
   try {
-    const server = await registerRoutes(app);
+    // Create HTTP server and initialize routes
+    const server = registerRoutes(app);
 
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
+    // Always use Vite in development for now
+    await setupVite(app, server);
 
-      res.status(status).json({ message });
-      throw err;
+    // Start server only after Vite is setup
+    server.listen(PORT, '0.0.0.0', () => {
+      log(`Server started successfully on port ${PORT}`);
+    }).on('error', (error: any) => {
+      console.error('Server startup error:', error);
+      process.exit(1);
     });
 
-    // importantly only setup vite in development and after
-    // setting up all the other routes so the catch-all route
-    // doesn't interfere with the other routes
-    if (app.get("env") === "development") {
-      await setupVite(app, server);
-    } else {
-      serveStatic(app);
-    }
-
-    // Server is already listening from registerRoutes
-    log(`Server initialized successfully`);
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('Failed to initialize server:', error);
     process.exit(1);
   }
-})();
+}
+
+// Start the server
+startServer();
