@@ -20,7 +20,71 @@ export function MenuBar() {
   const { toast } = useToast();
   const { theme, setTheme, variant, setVariant } = useTheme();
   const { currentFile, setCurrentFile, addFile, saveFile } = useFile();
-  
+  const [isSidebarVisible, setIsSidebarVisible] = React.useState(true);
+  const [isEditorSplit, setIsEditorSplit] = React.useState(false);
+
+  const handleOpenFolder = async () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.webkitdirectory = true;
+      input.onchange = async (e) => {
+        const files = e.target.files;
+        if (files?.length) {
+          // Handle folder upload logic
+          toast({
+            title: 'Success',
+            description: 'Folder opened successfully',
+          });
+        }
+      };
+      input.click();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to open folder',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleOpenFile = async () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.onchange = async (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            const content = e.target?.result;
+            // Handle file content
+            addFile(file.name);
+          };
+          reader.readAsText(file);
+        }
+      };
+      input.click();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to open file',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleToggleSidebar = () => {
+    setIsSidebarVisible(!isSidebarVisible);
+    // Emit event for sidebar toggle
+    window.dispatchEvent(new CustomEvent('toggle-sidebar'));
+  };
+
+  const handleSplitEditor = () => {
+    setIsEditorSplit(!isEditorSplit);
+    // Emit event for editor split
+    window.dispatchEvent(new CustomEvent('split-editor'));
+  };
 
   const handleNewFile = async () => {
     try {
@@ -132,11 +196,11 @@ export function MenuBar() {
           <MenubarSub>
             <MenubarSubTrigger>Open</MenubarSubTrigger>
             <MenubarSubContent>
-              <MenubarItem>
+              <MenubarItem onClick={handleOpenFolder}>
                 <FolderOpen className="mr-2 h-4 w-4" />
                 Open Folder...
               </MenubarItem>
-              <MenubarItem>
+              <MenubarItem onClick={handleOpenFile}>
                 <FileText className="mr-2 h-4 w-4" />
                 Open File...
               </MenubarItem>
@@ -181,9 +245,11 @@ export function MenuBar() {
       <MenubarMenu>
         <MenubarTrigger className="font-bold">View</MenubarTrigger>
         <MenubarContent>
-          <MenubarItem>Split Editor</MenubarItem>
+          <MenubarItem onClick={handleSplitEditor}>Split Editor</MenubarItem>
           <MenubarSeparator />
-          <MenubarItem>Toggle Sidebar <MenubarShortcut>⌘B</MenubarShortcut></MenubarItem>
+          <MenubarItem onClick={handleToggleSidebar}>
+            Toggle Sidebar <MenubarShortcut>⌘B</MenubarShortcut>
+          </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
 
