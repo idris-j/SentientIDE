@@ -61,12 +61,17 @@ app.use((req, res, next) => {
       const pathname = new URL(request.url!, `${protocol}://${request.headers.host}`).pathname;
 
       if (pathname === '/terminal') {
+        log('Terminal WebSocket upgrade request received', 'terminal');
         terminalWss.handleUpgrade(request, socket, head, (ws) => {
+          log('Terminal WebSocket connection established', 'terminal');
           terminalWss.emit('connection', ws, request);
         });
+      } else {
+        log(`Rejecting WebSocket upgrade for unknown path: ${pathname}`, 'terminal');
+        socket.destroy();
       }
     } catch (error) {
-      console.error('WebSocket upgrade error:', error);
+      log(`WebSocket upgrade error: ${error}`, 'terminal');
       socket.destroy();
     }
   });
