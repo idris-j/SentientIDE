@@ -98,15 +98,19 @@ export function Terminal({ className }: TerminalProps) {
 
     // Handle resize
     const handleResize = () => {
-      if (!fitAddonRef.current) return
+      if (!fitAddonRef.current || !xtermRef.current) return;
       
-      fitAddonRef.current.fit()
-      if (wsRef.current?.readyState === WebSocket.OPEN && xtermRef.current) {
-        wsRef.current.send(JSON.stringify({
-          type: "resize",
-          cols: xtermRef.current.cols,
-          rows: xtermRef.current.rows,
-        }))
+      try {
+        fitAddonRef.current.fit();
+        if (wsRef.current?.readyState === WebSocket.OPEN && xtermRef.current) {
+          wsRef.current.send(JSON.stringify({
+            type: "resize",
+            cols: xtermRef.current.cols,
+            rows: xtermRef.current.rows,
+          }));
+        }
+      } catch (error) {
+        console.error('Error resizing terminal:', error);
       }
     }
 

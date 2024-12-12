@@ -19,8 +19,12 @@ export function MenuBar() {
 const toggleTerminal = () => {
   const terminal = document.getElementById('terminal-panel');
   if (terminal) {
-    const isHidden = terminal.style.display === 'none';
+    const currentDisplay = terminal.style.display;
+    const isHidden = currentDisplay === 'none' || currentDisplay === '';
     terminal.style.display = isHidden ? 'flex' : 'none';
+    
+    // Trigger a resize event to ensure the terminal fits properly
+    window.dispatchEvent(new Event('resize'));
   }
 };
 

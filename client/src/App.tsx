@@ -27,7 +27,7 @@ function App() {
                   <div 
                     id="terminal-panel" 
                     className="h-1/3 border-t border-border" 
-                    style={{ display: 'none' }}
+                    style={{ display: '' }}
                     data-panel="terminal"
                   >
                     <Terminal className="h-full" />
