@@ -86,15 +86,25 @@ export function TabsView() {
                 onValueChange={setCurrentFile}
                 className="h-full"
               >
-                {openFiles.map((file) => (
-                  <TabsContent
-                    key={file}
-                    value={file}
-                    className="h-full data-[state=inactive]:hidden"
-                  >
-                    <CodeEditor filePath={file} />
-                  </TabsContent>
-                ))}
+                <div className="border-b px-1 bg-muted/10">
+                  <TabsList className="h-8 w-full justify-start gap-1 bg-transparent p-0">
+                    <TabsTrigger
+                      value={currentFile || ""}
+                      className={cn(
+                        "relative h-7 rounded-none border-b-2 border-b-transparent px-3 pb-2 pt-1 font-normal hover:bg-muted/30 data-[state=active]:border-b-primary data-[state=active]:bg-muted/40",
+                        "text-sm"
+                      )}
+                    >
+                      {currentFile?.split('/').pop()}
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+                <TabsContent
+                  value={currentFile || ""}
+                  className="h-[calc(100%-2rem)] data-[state=inactive]:hidden"
+                >
+                  <CodeEditor filePath={currentFile || ""} />
+                </TabsContent>
               </Tabs>
             </ResizablePanel>
             
@@ -106,11 +116,27 @@ export function TabsView() {
                 onValueChange={setSplitFile}
                 className="h-full"
               >
+                <div className="border-b px-1 bg-muted/10">
+                  <TabsList className="h-8 w-full justify-start gap-1 bg-transparent p-0">
+                    {openFiles.map((file) => (
+                      <TabsTrigger
+                        key={file}
+                        value={file}
+                        className={cn(
+                          "relative h-7 rounded-none border-b-2 border-b-transparent px-3 pb-2 pt-1 font-normal hover:bg-muted/30 data-[state=active]:border-b-primary data-[state=active]:bg-muted/40",
+                          "text-sm"
+                        )}
+                      >
+                        {file.split('/').pop()}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
                 {openFiles.map((file) => (
                   <TabsContent
                     key={file}
                     value={file}
-                    className="h-full data-[state=inactive]:hidden"
+                    className="h-[calc(100%-2rem)] data-[state=inactive]:hidden"
                   >
                     <CodeEditor filePath={file} />
                   </TabsContent>
