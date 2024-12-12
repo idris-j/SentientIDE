@@ -66,9 +66,20 @@ export function Terminal({ className }: TerminalProps) {
       try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
         const ws = new WebSocket(`${protocol}//${window.location.host}/terminal`)
+        
+        // Set a timeout for the connection
+        const connectionTimeout = setTimeout(() => {
+          if (ws.readyState !== WebSocket.OPEN) {
+            ws.close()
+            term.write("\r\n\x1B[1;3;31mConnection timeout. Retrying...\x1B[0m\r\n")
+            setTimeout(connectWebSocket, 2000)
+          }
+        }, 5000)
+        
         wsRef.current = ws
         
         ws.onopen = () => {
+          clearTimeout(connectionTimeout)
           console.log("WebSocket connected")
           term.write("\x1B[1;3;32mTerminal connected.\x1B[0m\r\n$ ")
           
@@ -84,18 +95,21 @@ export function Terminal({ className }: TerminalProps) {
 
         ws.onclose = (event) => {
           console.log("WebSocket disconnected", event.code, event.reason)
-          if (!event.wasClean) {
+          // Only attempt to reconnect if the terminal is still mounted and it wasn't a clean close
+          if (terminalRef.current && !event.wasClean) {
             term.write("\r\n\x1B[1;3;31mTerminal disconnected. Attempting to reconnect...\x1B[0m\r\n")
-            // Only attempt to reconnect if the terminal is still mounted
-            if (terminalRef.current) {
-              setTimeout(connectWebSocket, 3000)
-            }
+            // Increase reconnect delay with each attempt, max 5 seconds
+            const delay = Math.min((event.code === 1006 ? 1000 : 2000), 5000)
+            setTimeout(connectWebSocket, delay)
           }
         }
 
         ws.onerror = (event) => {
           console.error("WebSocket error:", event)
-          term.write("\r\n\x1B[1;3;31mTerminal connection error. Please try again.\x1B[0m\r\n")
+          // Don't show error message if we're already disconnected
+          if (ws.readyState === WebSocket.OPEN) {
+            term.write("\r\n\x1B[1;3;31mTerminal connection error. Retrying...\x1B[0m\r\n")
+          }
         }
 
         ws.onmessage = (event) => {

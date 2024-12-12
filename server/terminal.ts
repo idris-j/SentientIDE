@@ -15,11 +15,11 @@ export function handleTerminal(ws: WebSocket) {
   try {
     const shell = os.platform() === "win32" ? "powershell.exe" : "bash"
     const ptyProcess = pty.spawn(shell, [], {
-      name: "xterm-color",
+      name: "xterm-256color",
       cols: 80,
       rows: 24,
       cwd: process.env.HOME || process.cwd(),
-      env: process.env as { [key: string]: string },
+      env: { ...process.env, TERM: 'xterm-256color' } as { [key: string]: string },
     })
 
     const session: TerminalSession = {
