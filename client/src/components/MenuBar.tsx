@@ -87,19 +87,42 @@ export function MenuBar() {
     }
   };
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(window.getSelection()?.toString() || '');
+  const handleCopy = () => {
+    const editor = (window as any).monaco?.editor.getActiveEditor();
+    if (editor) {
+      editor.getAction('editor.action.clipboardCopyAction').run();
       toast({
         title: 'Success',
         description: 'Copied to clipboard',
       });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to copy to clipboard',
-        variant: 'destructive',
-      });
+    }
+  };
+
+  const handleCut = () => {
+    const editor = (window as any).monaco?.editor.getActiveEditor();
+    if (editor) {
+      editor.getAction('editor.action.clipboardCutAction').run();
+    }
+  };
+
+  const handlePaste = () => {
+    const editor = (window as any).monaco?.editor.getActiveEditor();
+    if (editor) {
+      editor.getAction('editor.action.clipboardPasteAction').run();
+    }
+  };
+
+  const handleUndo = () => {
+    const editor = (window as any).monaco?.editor.getActiveEditor();
+    if (editor) {
+      editor.trigger('keyboard', 'undo', null);
+    }
+  };
+
+  const handleRedo = () => {
+    const editor = (window as any).monaco?.editor.getActiveEditor();
+    if (editor) {
+      editor.trigger('keyboard', 'redo', null);
     }
   };
 
@@ -161,16 +184,16 @@ React.useEffect(() => {
       <MenubarMenu>
         <MenubarTrigger className="font-bold">Edit</MenubarTrigger>
         <MenubarContent>
-          <MenubarItem onClick={() => document.execCommand('undo')}>
+          <MenubarItem onClick={handleUndo}>
             <RotateCcw className="mr-2 h-4 w-4" />
             Undo <MenubarShortcut>⌘Z</MenubarShortcut>
           </MenubarItem>
-          <MenubarItem onClick={() => document.execCommand('redo')}>
+          <MenubarItem onClick={handleRedo}>
             <RotateCw className="mr-2 h-4 w-4" />
             Redo <MenubarShortcut>⇧⌘Z</MenubarShortcut>
           </MenubarItem>
           <MenubarSeparator />
-          <MenubarItem onClick={() => document.execCommand('cut')}>
+          <MenubarItem onClick={handleCut}>
             <Scissors className="mr-2 h-4 w-4" />
             Cut <MenubarShortcut>⌘X</MenubarShortcut>
           </MenubarItem>
@@ -178,7 +201,7 @@ React.useEffect(() => {
             <Copy className="mr-2 h-4 w-4" />
             Copy <MenubarShortcut>⌘C</MenubarShortcut>
           </MenubarItem>
-          <MenubarItem onClick={() => document.execCommand('paste')}>
+          <MenubarItem onClick={handlePaste}>
             <Clipboard className="mr-2 h-4 w-4" />
             Paste <MenubarShortcut>⌘V</MenubarShortcut>
           </MenubarItem>

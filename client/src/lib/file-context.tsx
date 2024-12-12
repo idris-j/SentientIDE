@@ -34,9 +34,9 @@ export function FileProvider({ children }: { children: React.ReactNode }) {
   };
 
   const saveFile = async (path: string) => {
-    const editor = window.monaco?.editor.getModels().find(model => 
-      model.uri.path === path
-    );
+    const editor = (window as any).monaco?.editor
+      .getModels()
+      .find((model: any) => model.uri.path === path);
     
     if (!editor) {
       throw new Error('File not found in editor');
