@@ -1,11 +1,17 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
+import { IncomingMessage } from 'http';
 import fileUpload from 'express-fileupload';
 import AdmZip from 'adm-zip';
 import path from 'path';
 import { analyzeCode, handleQuery } from './services/claude';
+import { handleTerminal } from './terminal';
 import fs from 'fs/promises';
+
+interface ExtWebSocket extends WebSocket {
+  isAlive?: boolean;
+}
 
 export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
@@ -15,25 +21,66 @@ export function registerRoutes(app: Express): Server {
     limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
     useTempFiles: true,
     tempFileDir: '/tmp/',
-    debug: true
+    debug: false, // Disable debug mode to reduce noise
+    safeFileNames: true,
+    preserveExtension: true,
+    abortOnLimit: true,
+    responseOnLimit: 'File size limit has been reached',
+    uploadTimeout: 30000,
+    createParentPath: true,
+    parseNested: true
   }));
+
+  // Add error handling middleware
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error('Error:', err);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'File is too large' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  });
 
   // Create WebSocket server
   const wss = new WebSocketServer({ 
     noServer: true,
-    clientTracking: true
+    clientTracking: true,
+    maxPayload: 50 * 1024 * 1024 // 50MB max payload
   });
 
+  wss.setMaxListeners(20); // Increase max listeners to prevent memory leak warning
+
+  // Initialize ping interval
+  const pingInterval = 30000;
+  let pingTimer: NodeJS.Timeout;
+
+  function heartbeat(this: ExtWebSocket) {
+    this.isAlive = true;
+  }
+
+  function noop() {}
+
+  // Start ping interval
+  function startHeartbeat() {
+    clearInterval(pingTimer);
+    pingTimer = setInterval(() => {
+      wss.clients.forEach((ws: ExtWebSocket) => {
+        if (ws.isAlive === false) {
+          console.log('Client connection dead, terminating');
+          return ws.terminate();
+        }
+        ws.isAlive = false;
+        ws.ping(noop);
+      });
+    }, pingInterval);
+  }
+
+  startHeartbeat();
+
   // Handle upgrade requests
-  httpServer.on('upgrade', (request, socket, head) => {
+  httpServer.on('upgrade', (request: IncomingMessage, socket, head) => {
     try {
-      const pathname = new URL(request.url!, `http://${request.headers.host}`).pathname;
-      
-      if (pathname !== '/ws/ide') {
-        console.log('Rejecting WebSocket connection for path:', pathname);
-        socket.destroy();
-        return;
-      }
+      const protocol = request.headers['x-forwarded-proto'] || 'http';
+      const pathname = new URL(request.url!, `${protocol}://${request.headers.host}`).pathname;
 
       // Skip vite-hmr connections
       if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
@@ -42,27 +89,42 @@ export function registerRoutes(app: Express): Server {
         return;
       }
 
-      console.log('Handling WebSocket upgrade for path:', pathname);
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit('connection', ws, request);
-      });
+      const handleConnection = (ws: WebSocket) => {
+        const extWs = ws as ExtWebSocket;
+        extWs.isAlive = true;
+
+        if (pathname === '/ws/ide') {
+          console.log('IDE WebSocket connection established');
+          wss.emit('connection', extWs, request);
+        } else if (pathname === '/terminal') {
+          console.log('Terminal connection established');
+          handleTerminal(extWs);
+        }
+      };
+
+      if (pathname === '/ws/ide' || pathname === '/terminal') {
+        console.log(`Handling WebSocket upgrade for path: ${pathname}`);
+        wss.handleUpgrade(request, socket, head, handleConnection);
+      } else {
+        console.log(`Invalid WebSocket path: ${pathname}`);
+        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+        socket.destroy();
+      }
     } catch (error) {
       console.error('Error in WebSocket upgrade:', error);
+      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
       socket.destroy();
     }
   });
 
-  wss.on('connection', (ws, request) => {
+  wss.on('connection', (ws: ExtWebSocket, request: IncomingMessage) => {
     console.log('WebSocket client connected', {
       url: request.url,
       protocol: request.headers['sec-websocket-protocol']
     });
 
-    const heartbeat = setInterval(() => {
-      if (ws.readyState === ws.OPEN) {
-        ws.ping();
-      }
-    }, 30000);
+    ws.isAlive = true;
+    ws.on('pong', heartbeat);
 
     ws.on('message', async (message) => {
       try {
@@ -91,14 +153,19 @@ export function registerRoutes(app: Express): Server {
       }
     });
 
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
-      clearInterval(heartbeat);
-    });
-
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
-      clearInterval(heartbeat);
+      ws.terminate();
+    });
+
+    ws.on('close', (code: number, reason: string) => {
+      console.log(`WebSocket client disconnected with code ${code}${reason ? ` and reason: ${reason}` : ''}`);
+      ws.isAlive = false;
+    });
+    
+    // Clean up when the server closes
+    wss.on('close', () => {
+      clearInterval(pingTimer);
     });
   });
 
@@ -174,36 +241,36 @@ export function registerRoutes(app: Express): Server {
     try {
       const rootPath = process.cwd();
       
-      async function listFilesRecursive(dir: string, baseDir: string = ''): Promise<any[]> {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
-        const files = await Promise.all(
-          entries.map(async (entry) => {
-            const relativePath = path.join(baseDir, entry.name);
-            const fullPath = path.join(dir, entry.name);
-            
-            // Skip node_modules and hidden directories
-            if (entry.name.startsWith('.') || entry.name === 'node_modules') {
-              return [];
-            }
-            
-            if (entry.isDirectory()) {
-              const children = await listFilesRecursive(fullPath, relativePath);
-              return {
-                name: entry.name,
-                type: 'folder',
-                children
-              };
-            }
-            
-            return {
-              name: entry.name,
-              type: 'file'
-            };
-          })
-        );
+      const listFilesRecursive = async (dir: string, baseDir: string = ''): Promise<any[]> => {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const files = await Promise.all(
+      entries.map(async (entry) => {
+        const relativePath = path.join(baseDir, entry.name);
+        const fullPath = path.join(dir, entry.name);
         
-        return files.flat();
-      }
+        // Skip node_modules and hidden directories
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+          return [];
+        }
+        
+        if (entry.isDirectory()) {
+          const children = await listFilesRecursive(fullPath, relativePath);
+          return {
+            name: entry.name,
+            type: 'folder',
+            children
+          };
+        }
+        
+        return {
+          name: entry.name,
+          type: 'file'
+        };
+      })
+    );
+    
+    return files.flat();
+  };
       
       const fileList = await listFilesRecursive(rootPath);
       res.json(fileList);

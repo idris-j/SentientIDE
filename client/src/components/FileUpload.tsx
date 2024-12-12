@@ -37,6 +37,9 @@ export function FileUpload({ onUploadSuccess }: FileUploadProps) {
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
       });
 
       const data = await response.json();

@@ -29,20 +29,47 @@ export function AIPanel() {
 
   useEffect(() => {
     if (ws) {
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setMessages(prev => [...prev, {
-          id: data.id,
-          role: 'assistant',
-          type: data.type,
-          content: data.content,
-          codeLanguage: data.codeLanguage,
-          fileName: data.fileName
-        }]);
-        setIsLoading(false);
+      const messageHandler = (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          setMessages(prev => [...prev, {
+            id: data.id,
+            role: 'assistant',
+            type: data.type,
+            content: data.content,
+            codeLanguage: data.codeLanguage,
+            fileName: data.fileName
+          }]);
+          setIsLoading(false);
+        } catch (error) {
+          console.error('Error processing message:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to process message from server',
+            variant: 'destructive',
+          });
+          setIsLoading(false);
+        }
+      };
+
+      const errorHandler = (error: Event) => {
+        console.error('WebSocket error:', error);
+        toast({
+          title: 'Connection Error',
+          description: 'Lost connection to server. Attempting to reconnect...',
+          variant: 'destructive',
+        });
+      };
+
+      ws.onmessage = messageHandler;
+      ws.onerror = errorHandler;
+
+      return () => {
+        ws.onmessage = null;
+        ws.onerror = null;
       };
     }
-  }, [ws]);
+  }, [ws, toast]);
 
   useEffect(() => {
     if (scrollRef.current) {
