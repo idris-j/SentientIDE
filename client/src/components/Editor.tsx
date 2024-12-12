@@ -4,28 +4,30 @@ import { Card } from '@/components/ui/card';
 import type * as Monaco from 'monaco-editor';
 import { useFile } from '@/lib/file-context';
 
-export function CodeEditor() {
-  const { currentFile } = useFile();
-  const [content, setContent] = useState<string>('// Select a file to edit');
+interface CodeEditorProps {
+  filePath: string;
+}
+
+export function CodeEditor({ filePath }: CodeEditorProps) {
+  const [content, setContent] = useState<string>('// Loading...');
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
 
   useEffect(() => {
     const fetchContent = async () => {
-      if (currentFile) {
-        try {
-          const response = await fetch(`/api/files/content?path=${encodeURIComponent(currentFile)}`);
-          if (response.ok) {
-            const text = await response.text();
-            setContent(text);
-          }
-        } catch (error) {
-          console.error('Failed to fetch file content:', error);
+      try {
+        const response = await fetch(`/api/files/content?path=${encodeURIComponent(filePath)}`);
+        if (response.ok) {
+          const text = await response.text();
+          setContent(text);
         }
+      } catch (error) {
+        console.error('Failed to fetch file content:', error);
+        setContent(`// Error loading ${filePath}\n// ${error}`);
       }
     };
 
     fetchContent();
-  }, [currentFile]);
+  }, [filePath]);
 
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor;

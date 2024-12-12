@@ -4,6 +4,7 @@ import { CodeEditor } from '@/components/Editor';
 import { AIPanel } from '@/components/AIPanel';
 import { Terminal } from '@/components/Terminal';
 import { MenuBar } from '@/components/MenuBar';
+import { TabsView } from '@/components/TabsView';
 import { ThemeProvider } from '@/lib/theme-context';
 import { FileProvider } from '@/lib/file-context';
 
@@ -23,7 +24,7 @@ function App() {
               
               <ResizablePanel defaultSize={50}>
                 <div className="h-full flex flex-col">
-                  <CodeEditor />
+                  <TabsView />
                   <div 
                     id="terminal-panel" 
                     className="h-1/3 border-t border-border" 
