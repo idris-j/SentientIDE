@@ -25,21 +25,29 @@ export function FileUpload() {
     formData.append('project', file);
 
     try {
+      console.log('Uploading file:', file.name);
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
 
       const data = await response.json();
+      console.log('Upload response:', data);
+      
       if (response.ok) {
         toast({
           title: 'Success',
           description: 'Project uploaded successfully',
         });
+        // Reset the input
+        if (event.target) {
+          event.target.value = '';
+        }
       } else {
         throw new Error(data.error || 'Failed to upload project');
       }
     } catch (error) {
+      console.error('Upload error:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to upload project',

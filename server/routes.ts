@@ -78,6 +78,8 @@ export function registerRoutes(app: Express): Server {
 
   app.post('/api/upload', async (req, res) => {
     try {
+      console.log('Upload request received:', req.files);
+      
       if (!req.files || !req.files.project) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
@@ -85,16 +87,27 @@ export function registerRoutes(app: Express): Server {
       const projectFile = req.files.project;
       const uploadPath = path.join(process.cwd(), 'uploads');
       
+      console.log('Creating upload directory:', uploadPath);
       // Create uploads directory if it doesn't exist
       await fs.mkdir(uploadPath, { recursive: true });
       
+      if (Array.isArray(projectFile)) {
+        return res.status(400).json({ error: 'Multiple file upload not supported' });
+      }
+
       const filePath = path.join(uploadPath, projectFile.name);
+      console.log('Moving file to:', filePath);
+      
       await projectFile.mv(filePath);
+      console.log('File uploaded successfully');
 
       res.json({ success: true, filename: projectFile.name });
     } catch (error) {
       console.error('Error uploading file:', error);
-      res.status(500).json({ error: 'Failed to upload file' });
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to upload file',
+        details: error 
+      });
     }
   });
 
