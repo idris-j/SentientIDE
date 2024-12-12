@@ -12,8 +12,86 @@ import fs from 'fs/promises';
 // For SSE clients
 const clients = new Set<ServerResponse>();
 
-export function registerRoutes(app: Express): Server {
+// Utility function to find an available port
+async function findAvailablePort(startPort: number, maxAttempts: number = 10): Promise<number> {
+  for (let port = startPort; port < startPort + maxAttempts; port++) {
+    try {
+      await new Promise((resolve, reject) => {
+        const server = createServer();
+        server.listen(port, '0.0.0.0')
+          .once('error', reject)
+          .once('listening', () => {
+            server.close(() => resolve(port));
+          });
+      });
+      return port;
+    } catch (err) {
+      if (port === startPort + maxAttempts - 1) {
+        throw new Error('No available ports found');
+      }
+      continue;
+    }
+  }
+  throw new Error('No available ports found');
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  let port = process.env.PORT ? parseInt(process.env.PORT) : 5000;
   const httpServer = createServer(app);
+
+  // Try to start the server on the specified port or find an available one
+  while (true) {
+    try {
+      await new Promise((resolve, reject) => {
+        httpServer.listen(port, '0.0.0.0')
+          .once('listening', () => {
+            console.log(`Server started successfully on port ${port}`);
+            resolve(true);
+          })
+          .once('error', (error) => {
+            if (error.code === 'EADDRINUSE') {
+              console.log(`Port ${port} is in use, trying next port...`);
+              port++;
+              httpServer.close();
+              resolve(false);
+            } else {
+              reject(error);
+            }
+          });
+      });
+      break;
+    } catch (error) {
+      console.error('Failed to start server:', error);
+      throw error;
+    }
+  }
+
+  // Handle uncaught errors
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
+
+  // Graceful shutdown handler
+  const shutdownGracefully = (signal: string) => {
+    console.log(`\n${signal} signal received. Closing HTTP server...`);
+    httpServer.close(() => {
+      console.log('HTTP server closed');
+      process.exit(0);
+    });
+
+    // Force close after 10 seconds
+    setTimeout(() => {
+      console.error('Could not close connections in time, forcefully shutting down');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => shutdownGracefully('SIGTERM'));
+  process.on('SIGINT', () => shutdownGracefully('SIGINT'));
 
   // Configure file upload middleware
   app.use(fileUpload({
@@ -41,26 +119,78 @@ export function registerRoutes(app: Express): Server {
 
   // SSE endpoint for IDE communication
   app.get('/api/sse', (req, res) => {
-    // Set SSE headers
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
-    });
+    try {
+      const clientId = Date.now().toString();
+      console.log(`New SSE connection attempt (${clientId})`);
 
-    // Send initial connection message
-    res.write(`data: ${JSON.stringify({ type: 'connection', status: 'connected' })}\n\n`);
+      // Set SSE headers with appropriate CORS and caching directives
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': 'true'
+      });
 
-    // Add client to the set
-    clients.add(res);
-    console.log('Client connected to SSE');
+      // Cleanup any existing zombied connection for this client
+      Array.from(clients).forEach(client => {
+        if (!client.writableEnded && client.finished) {
+          console.log('Cleaning up stale SSE connection');
+          clients.delete(client);
+        }
+      });
 
-    // Handle client disconnection
-    req.on('close', () => {
-      clients.delete(res);
-      console.log('Client disconnected from SSE');
-    });
+      // Send initial connection message
+      const initialMessage = JSON.stringify({ 
+        type: 'connection', 
+        status: 'connected', 
+        clientId,
+        timestamp: Date.now() 
+      });
+      res.write(`data: ${initialMessage}\n\n`);
+
+      // Setup heartbeat interval with error handling
+      const heartbeatInterval = setInterval(() => {
+        try {
+          if (!res.writableEnded) {
+            const heartbeat = JSON.stringify({ 
+              type: 'heartbeat',
+              clientId, 
+              timestamp: Date.now() 
+            });
+            res.write(`data: ${heartbeat}\n\n`);
+          } else {
+            throw new Error('Connection ended');
+          }
+        } catch (error) {
+          console.error(`Error sending SSE heartbeat to client ${clientId}:`, error);
+          clearInterval(heartbeatInterval);
+          clients.delete(res);
+        }
+      }, 30000); // Send heartbeat every 30 seconds
+
+      // Add client to the set
+      clients.add(res);
+      console.log(`Client ${clientId} connected to SSE`);
+
+      // Handle client disconnection
+      req.on('close', () => {
+        clearInterval(heartbeatInterval);
+        clients.delete(res);
+        console.log(`Client ${clientId} disconnected from SSE`);
+      });
+
+      // Handle errors
+      res.on('error', (error) => {
+        console.error(`SSE Response error for client ${clientId}:`, error);
+        clearInterval(heartbeatInterval);
+        clients.delete(res);
+      });
+    } catch (error) {
+      console.error('Error setting up SSE connection:', error);
+      res.status(500).end();
+    }
   });
 
   // Endpoint to send messages to the AI
@@ -126,13 +256,85 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // WebSocket connection tracking
+  const wsClients = new Map();
+
   // Terminal WebSocket server error handling
   terminalWss.on('error', (error) => {
     console.error('Terminal WebSocket server error:', error);
+    // Notify all connected clients about the error
+    Array.from(wsClients.entries()).forEach(([id, client]) => {
+      try {
+        client.ws.send(JSON.stringify({ type: 'error', message: 'Server error occurred' }));
+      } catch (e) {
+        console.error(`Error notifying client ${id}:`, e);
+      }
+    });
   });
 
   terminalWss.on('close', () => {
     console.log('Terminal WebSocket server closed');
+    // Clean up all client connections
+    Array.from(wsClients.entries()).forEach(([id, client]) => {
+      try {
+        client.ws.close(1012, 'Server is shutting down');
+        wsClients.delete(id);
+      } catch (e) {
+        console.error(`Error closing client ${id}:`, e);
+      }
+    });
+  });
+
+  // Enhanced WebSocket connection handler
+  terminalWss.on('connection', (ws, request) => {
+    const clientId = Date.now().toString();
+    const heartbeatInterval = setInterval(() => {
+      if (ws.readyState === ws.OPEN) {
+        try {
+          ws.ping();
+        } catch (error) {
+          console.error(`Error sending ping to client ${clientId}:`, error);
+          clearInterval(heartbeatInterval);
+          wsClients.delete(clientId);
+          try {
+            ws.close(1011, 'Server internal error');
+          } catch (e) {
+            console.error('Error closing WebSocket:', e);
+          }
+        }
+      }
+    }, 30000);
+
+    wsClients.set(clientId, { 
+      ws,
+      connectedAt: Date.now(),
+      heartbeatInterval
+    });
+
+    ws.on('pong', () => {
+      // Update last pong time
+      const client = wsClients.get(clientId);
+      if (client) {
+        client.lastPong = Date.now();
+      }
+    });
+
+    ws.on('error', (error) => {
+      console.error(`WebSocket error for client ${clientId}:`, error);
+      clearInterval(heartbeatInterval);
+      wsClients.delete(clientId);
+      try {
+        ws.close(1011, 'Server internal error');
+      } catch (e) {
+        console.error('Error closing WebSocket:', e);
+      }
+    });
+
+    ws.on('close', (code, reason) => {
+      console.log(`Client ${clientId} disconnected:`, code, reason);
+      clearInterval(heartbeatInterval);
+      wsClients.delete(clientId);
+    });
   });
 
   // File upload endpoint
@@ -210,6 +412,22 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Error listing files:', error);
       res.status(500).json({ error: 'Failed to list files' });
+    }
+  });
+
+  // Handle port conflicts by finding an available port
+  httpServer.on('error', async (error: any) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error('Port is already in use, attempting to find another port...');
+      try {
+        const newPort = await findAvailablePort(5000);
+        console.log(`Found available port: ${newPort}`);
+        httpServer.listen(newPort, '0.0.0.0');
+      } catch (err) {
+        console.error('Failed to find available port:', err);
+      }
+    } else {
+      console.error('Server error:', error);
     }
   });
 

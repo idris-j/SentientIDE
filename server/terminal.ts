@@ -8,6 +8,7 @@ interface TerminalSession {
   ws: WebSocket;
   pty: pty.IPty;
   lastActivity: number;
+  heartbeatInterval?: NodeJS.Timeout;
 }
 
 const sessions = new Map<WebSocket, TerminalSession>();
@@ -83,9 +84,9 @@ export function handleTerminal(ws: WebSocket) {
   try {
     log("New terminal connection established", "terminal");
     
-    // Start ping interval if not already started
-    if (!pingInterval) {
-      startPingInterval();
+    // Start ping and cleanup intervals if not already started
+    if (!pingInterval || !cleanupInterval) {
+      startIntervals();
     }
     
     const shell = os.platform() === "win32" ? "powershell.exe" : "bash";
@@ -102,6 +103,7 @@ export function handleTerminal(ws: WebSocket) {
       pid: ptyProcess.pid,
       ws,
       pty: ptyProcess,
+      lastActivity: Date.now()
     }
 
     sessions.set(ws, session)
