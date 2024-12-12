@@ -273,49 +273,42 @@ export function Sidebar() {
       <div key={fullPath}>
         <ContextMenu>
           <ContextMenuTrigger>
-            <div>
-              <Popover open={fileToRename?.path === fullPath} onOpenChange={(open) => !open && setFileToRename(null)}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    style={{ paddingLeft: `${depth * 1.5}rem` }}
-                    onClick={(e) => {
-                      if (node.type === 'folder') {
-                        toggleFolder(fullPath);
-                      }
-                      handleFileSelection(fullPath, node.type, e);
-                    }}
-                    className={cn(
-                      "w-full justify-start gap-2 font-normal",
-                      isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50 hover:text-accent-foreground",
-                      "focus-visible:bg-accent focus-visible:text-accent-foreground"
-                    )}
-                    onKeyDown={(e) => {
-                      if (e.key === ' ' || e.key === 'Enter') {
-                        e.preventDefault();
-                        handleFileSelection(fullPath, node.type, e as unknown as React.MouseEvent);
-                      }
-                    }}
-                  >
-                    {node.type === 'folder' && (
-                      <div className="w-4 h-4 flex items-center justify-center">
-                        {isExpanded ? '▼' : '▶'}
-                      </div>
-                    )}
-                    {node.type === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
-                    {node.name}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent 
-                  className="w-72 p-4" 
-                  side="bottom" 
-                  align="start" 
-                  sideOffset={5}
-                >
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                style={{ paddingLeft: `${depth * 1.5}rem` }}
+                onClick={(e) => {
+                  if (node.type === 'folder') {
+                    toggleFolder(fullPath);
+                  }
+                  handleFileSelection(fullPath, node.type, e);
+                }}
+                className={cn(
+                  "w-full justify-start gap-2 font-normal",
+                  isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50 hover:text-accent-foreground",
+                  "focus-visible:bg-accent focus-visible:text-accent-foreground"
+                )}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    handleFileSelection(fullPath, node.type, e as unknown as React.MouseEvent);
+                  }
+                }}
+              >
+                {node.type === 'folder' && (
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    {isExpanded ? '▼' : '▶'}
+                  </div>
+                )}
+                {node.type === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
+                {node.name}
+              </Button>
+              {fileToRename?.path === fullPath && (
+                <div className="absolute left-0 top-full z-50 mt-2 w-72 rounded-md border bg-popover p-4 shadow-md">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <h4 className="font-medium text-sm">Rename {fileToRename?.name}</h4>
+                      <h4 className="font-medium text-sm">Rename {fileToRename.name}</h4>
                       <Input
                         id="name"
                         value={newFileName}
@@ -349,8 +342,8 @@ export function Sidebar() {
                       </Button>
                     </div>
                   </div>
-                </PopoverContent>
-              </Popover>
+                </div>
+              )}
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
