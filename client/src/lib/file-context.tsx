@@ -6,6 +6,7 @@ interface FileContextType {
   openFiles: string[];
   closeFile: (path: string) => void;
   addFile: (path: string) => void;
+  saveFile: (path: string) => Promise<void>;
 }
 
 const FileContext = createContext<FileContextType | undefined>(undefined);
@@ -32,13 +33,38 @@ export function FileProvider({ children }: { children: React.ReactNode }) {
     setCurrentFile(path);
   };
 
+  const saveFile = async (path: string) => {
+    const editor = window.monaco?.editor.getModels().find(model => 
+      model.uri.path === path
+    );
+    
+    if (!editor) {
+      throw new Error('File not found in editor');
+    }
+
+    const content = editor.getValue();
+    
+    const response = await fetch(`/api/files/save`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path, content }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to save file');
+    }
+  };
+
   return (
     <FileContext.Provider value={{ 
       currentFile, 
       setCurrentFile, 
       openFiles, 
       closeFile, 
-      addFile 
+      addFile,
+      saveFile
     }}>
       {children}
     </FileContext.Provider>

@@ -13,20 +13,102 @@ import {
 } from "@/components/ui/menubar"
 import { useTheme } from "@/lib/theme-context"
 import { useFile } from "@/lib/file-context"
-import { FileText, Save, FolderOpen, Settings } from "lucide-react"
+import { FileText, Save, FolderOpen, Settings, FileIcon, Copy, Scissors, Clipboard, RotateCcw, RotateCw } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 export function MenuBar() {
-const toggleTerminal = () => {
-  const terminal = document.getElementById('terminal-panel');
-  if (terminal) {
-    const currentDisplay = terminal.style.display;
-    const isHidden = currentDisplay === 'none' || currentDisplay === '';
-    terminal.style.display = isHidden ? 'flex' : 'none';
-    
-    // Trigger a resize event to ensure the terminal fits properly
-    window.dispatchEvent(new Event('resize'));
-  }
-};
+  const { toast } = useToast();
+  const { theme, setTheme, variant, setVariant } = useTheme();
+  const { currentFile, setCurrentFile, addFile, saveFile } = useFile();
+  
+  const toggleTerminal = () => {
+    const terminal = document.getElementById('terminal-panel');
+    if (terminal) {
+      const currentDisplay = terminal.style.display;
+      const isHidden = currentDisplay === 'none' || currentDisplay === '';
+      terminal.style.display = isHidden ? 'flex' : 'none';
+      
+      // Trigger a resize event to ensure the terminal fits properly
+      window.dispatchEvent(new Event('resize'));
+    }
+  };
+
+  const handleNewFile = async () => {
+    try {
+      const response = await fetch('/api/files/new', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'untitled.ts' }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create new file');
+      }
+
+      const data = await response.json();
+      addFile(data.path);
+      toast({
+        title: 'Success',
+        description: 'New file created',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to create file',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    if (!currentFile) {
+      toast({
+        title: 'Error',
+        description: 'No file is currently open',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await saveFile(currentFile);
+      toast({
+        title: 'Success',
+        description: 'File saved successfully',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to save file',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(window.getSelection()?.toString() || '');
+      toast({
+        title: 'Success',
+        description: 'Copied to clipboard',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to copy to clipboard',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const clearTerminal = () => {
+    const terminal = document.querySelector('.xterm-screen');
+    if (terminal) {
+      terminal.textContent = '';
+    }
+  };
 
 // Add keyboard shortcut for terminal toggle
 React.useEffect(() => {
@@ -41,18 +123,16 @@ React.useEffect(() => {
   return () => window.removeEventListener('keydown', handleKeyDown);
 }, []);
 
-  const { theme, setTheme, variant, setVariant } = useTheme()
-  const { currentFile, setCurrentFile } = useFile()
-
   return (
     <Menubar className="border-b px-2 lg:px-4">
       <MenubarMenu>
         <MenubarTrigger className="font-bold">File</MenubarTrigger>
         <MenubarContent>
-          <MenubarItem>
+          <MenubarItem onClick={handleNewFile}>
+            <FileIcon className="mr-2 h-4 w-4" />
             New File <MenubarShortcut>⌘N</MenubarShortcut>
           </MenubarItem>
-          <MenubarItem>
+          <MenubarItem onSelect={() => window.open(window.location.href, '_blank')}>
             New Window <MenubarShortcut>⇧⌘N</MenubarShortcut>
           </MenubarItem>
           <MenubarSeparator />
@@ -70,7 +150,7 @@ React.useEffect(() => {
             </MenubarSubContent>
           </MenubarSub>
           <MenubarSeparator />
-          <MenubarItem>
+          <MenubarItem onClick={handleSave}>
             <Save className="mr-2 h-4 w-4" />
             Save <MenubarShortcut>⌘S</MenubarShortcut>
           </MenubarItem>
@@ -81,12 +161,27 @@ React.useEffect(() => {
       <MenubarMenu>
         <MenubarTrigger className="font-bold">Edit</MenubarTrigger>
         <MenubarContent>
-          <MenubarItem>Undo <MenubarShortcut>⌘Z</MenubarShortcut></MenubarItem>
-          <MenubarItem>Redo <MenubarShortcut>⇧⌘Z</MenubarShortcut></MenubarItem>
+          <MenubarItem onClick={() => document.execCommand('undo')}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Undo <MenubarShortcut>⌘Z</MenubarShortcut>
+          </MenubarItem>
+          <MenubarItem onClick={() => document.execCommand('redo')}>
+            <RotateCw className="mr-2 h-4 w-4" />
+            Redo <MenubarShortcut>⇧⌘Z</MenubarShortcut>
+          </MenubarItem>
           <MenubarSeparator />
-          <MenubarItem>Cut <MenubarShortcut>⌘X</MenubarShortcut></MenubarItem>
-          <MenubarItem>Copy <MenubarShortcut>⌘C</MenubarShortcut></MenubarItem>
-          <MenubarItem>Paste <MenubarShortcut>⌘V</MenubarShortcut></MenubarItem>
+          <MenubarItem onClick={() => document.execCommand('cut')}>
+            <Scissors className="mr-2 h-4 w-4" />
+            Cut <MenubarShortcut>⌘X</MenubarShortcut>
+          </MenubarItem>
+          <MenubarItem onClick={handleCopy}>
+            <Copy className="mr-2 h-4 w-4" />
+            Copy <MenubarShortcut>⌘C</MenubarShortcut>
+          </MenubarItem>
+          <MenubarItem onClick={() => document.execCommand('paste')}>
+            <Clipboard className="mr-2 h-4 w-4" />
+            Paste <MenubarShortcut>⌘V</MenubarShortcut>
+          </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
 
