@@ -107,38 +107,31 @@ export function MenuBar() {
 
       const data = await response.json();
       
-      try {
-        // Save empty file first
-        await saveFile(data.path, '');
+      // Initialize Monaco editor model with empty content
+      const monaco = (window as any).monaco;
+      if (monaco) {
+        const uri = monaco.Uri.parse(data.path);
         
-        // Initialize Monaco editor model with empty content
-        const monaco = (window as any).monaco;
-        if (monaco) {
-          const uri = monaco.Uri.parse(data.path);
-          
-          // Always dispose existing model to ensure clean state
-          const existingModel = monaco.editor.getModel(uri);
-          if (existingModel) {
-            existingModel.dispose();
-          }
-
-          // Detect language from file extension
-          const fileExtension = data.path.split('.').pop() || '';
-          const language = monaco.languages.getLanguages()
-            .find((lang: any) => 
-              lang.extensions?.some((ext: string) => 
-                ext.toLowerCase() === `.${fileExtension.toLowerCase()}`
-              )
-            )?.id || 'plaintext';
-
-          // Create new model with empty content
-          monaco.editor.createModel('', language, uri);
+        // Always dispose existing model to ensure clean state
+        const existingModel = monaco.editor.getModel(uri);
+        if (existingModel) {
+          existingModel.dispose();
         }
-        
-        addFile(data.path);
-      } catch (saveError) {
-        throw new Error(`Failed to initialize file: ${saveError.message}`);
+
+        // Detect language from file extension
+        const fileExtension = data.path.split('.').pop() || '';
+        const language = monaco.languages.getLanguages()
+          .find((lang: any) => 
+            lang.extensions?.some((ext: string) => 
+              ext.toLowerCase() === `.${fileExtension.toLowerCase()}`
+            )
+          )?.id || 'plaintext';
+
+        // Create new model with empty content
+        monaco.editor.createModel('', language, uri);
       }
+      
+      addFile(data.path);
       toast({
         title: 'Success',
         description: 'New file created',
