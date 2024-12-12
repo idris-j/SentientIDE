@@ -311,82 +311,84 @@ export function Sidebar() {
                 {node.name}
               </Button>
               {fileToRename?.path === fullPath && (
-                <Dialog open={true} onOpenChange={() => setFileToRename(null)}>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Rename {fileToRename.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <Input
-                        id="name"
-                        value={newFileName}
-                        onChange={(e) => setNewFileName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleRenameSubmit();
-                          } else if (e.key === 'Escape') {
-                            setFileToRename(null);
-                          }
-                        }}
-                        placeholder="Enter new name"
-                        className="h-8"
-                        autoFocus
-                      />
+                <Popover open={true} onOpenChange={() => setFileToRename(null)}>
+                  <PopoverContent
+                    className="w-80"
+                    align="start"
+                    side="bottom"
+                    sideOffset={5}
+                  >
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-sm leading-none">Rename {fileToRename.name}</h4>
+                        <Input
+                          id="name"
+                          value={newFileName}
+                          onChange={(e) => setNewFileName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleRenameSubmit();
+                            } else if (e.key === 'Escape') {
+                              setFileToRename(null);
+                            }
+                          }}
+                          placeholder="Enter new name"
+                          className="h-8"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setFileToRename(null)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          size="sm"
+                          onClick={handleRenameSubmit}
+                        >
+                          Rename
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setFileToRename(null)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button 
-                        size="sm"
-                        onClick={handleRenameSubmit}
-                      >
-                        Rename
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                  </PopoverContent>
+                </Popover>
               )}
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
-            {(() => {
-              const isMultipleSelection = selectedFiles.size > 1;
-              const currentPath = fullPath;
-              const isCurrentFileSelected = selectedFiles.has(currentPath);
-              const filesToOperate = isMultipleSelection && isCurrentFileSelected
-                ? Array.from(selectedFiles)
-                : [currentPath];
-              const itemCount = isMultipleSelection && isCurrentFileSelected 
-                ? selectedFiles.size 
-                : 1;
-
-              return (
-                <>
-                  {node.name.endsWith('.zip') && !isMultipleSelection && (
-                    <ContextMenuItem onClick={() => handleUnzip(currentPath)}>
-                      Extract Here
-                    </ContextMenuItem>
-                  )}
-                  <ContextMenuItem onClick={() => handleDuplicate(filesToOperate)}>
-                    Duplicate {itemCount > 1 ? `(${itemCount} items)` : ''}
+            {selectedFiles.size > 1 ? (
+              // Multiple files selected
+              <>
+                <ContextMenuItem onClick={() => handleDuplicate(Array.from(selectedFiles))}>
+                  Duplicate ({selectedFiles.size} items)
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleDelete(Array.from(selectedFiles))} className="text-destructive">
+                  Delete ({selectedFiles.size} items)
+                </ContextMenuItem>
+              </>
+            ) : (
+              // Single file selected
+              <>
+                {node.name.endsWith('.zip') && (
+                  <ContextMenuItem onClick={() => handleUnzip(fullPath)}>
+                    Extract Here
                   </ContextMenuItem>
-                  <ContextMenuItem onClick={() => handleDelete(filesToOperate)} className="text-destructive">
-                    Delete {itemCount > 1 ? `(${itemCount} items)` : ''}
-                  </ContextMenuItem>
-                  {!isMultipleSelection && (
-                    <ContextMenuItem onClick={() => handleRename(currentPath, node.type)}>
-                      Rename
-                    </ContextMenuItem>
-                  )}
-                </>
-              );
-            })()}
+                )}
+                <ContextMenuItem onClick={() => handleDuplicate(fullPath)}>
+                  Duplicate
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleDelete(fullPath)} className="text-destructive">
+                  Delete
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleRename(fullPath, node.type)}>
+                  Rename
+                </ContextMenuItem>
+              </>
+            )}
           </ContextMenuContent>
         </ContextMenu>
         {node.type === 'folder' && isExpanded && node.children && (
