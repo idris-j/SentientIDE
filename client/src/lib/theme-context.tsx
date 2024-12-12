@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
 type ThemeAppearance = 'light' | 'dark' | 'system';
-type ThemeVariant = 'professional' | 'vibrant' | 'minimal' | 'modern';
+type ThemeVariant = 'professional' | 'vibrant';
 
 interface ThemeContextType {
   theme: ThemeAppearance;
@@ -40,28 +40,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       try {
         const presets = {
           professional: {
-            primary: effectiveTheme === 'light' ? 'hsl(210 100% 50%)' : 'hsl(210 100% 60%)',
-            secondary: effectiveTheme === 'light' ? 'hsl(210 40% 96%)' : 'hsl(210 40% 24%)',
-            accent: effectiveTheme === 'light' ? 'hsl(210 40% 90%)' : 'hsl(210 40% 30%)',
+            primary: effectiveTheme === 'light' ? 'hsl(210, 100%, 50%)' : 'hsl(210, 100%, 60%)',
+            secondary: effectiveTheme === 'light' ? 'hsl(210, 40%, 96%)' : 'hsl(210, 40%, 24%)',
+            accent: effectiveTheme === 'light' ? 'hsl(210, 40%, 90%)' : 'hsl(210, 40%, 30%)',
             radius: 0.75
           },
           vibrant: {
-            primary: effectiveTheme === 'light' ? 'hsl(280 100% 60%)' : 'hsl(280 100% 70%)',
-            secondary: effectiveTheme === 'light' ? 'hsl(280 70% 96%)' : 'hsl(280 70% 24%)',
-            accent: effectiveTheme === 'light' ? 'hsl(280 70% 90%)' : 'hsl(280 70% 30%)',
+            primary: effectiveTheme === 'light' ? 'hsl(280, 100%, 60%)' : 'hsl(280, 100%, 70%)',
+            secondary: effectiveTheme === 'light' ? 'hsl(280, 70%, 96%)' : 'hsl(280, 70%, 24%)',
+            accent: effectiveTheme === 'light' ? 'hsl(280, 70%, 90%)' : 'hsl(280, 70%, 30%)',
             radius: 1
-          },
-          minimal: {
-            primary: effectiveTheme === 'light' ? 'hsl(0 0% 30%)' : 'hsl(0 0% 70%)',
-            secondary: effectiveTheme === 'light' ? 'hsl(0 0% 96%)' : 'hsl(0 0% 24%)',
-            accent: effectiveTheme === 'light' ? 'hsl(0 0% 90%)' : 'hsl(0 0% 30%)',
-            radius: 0.25
-          },
-          professional: {
-            primary: effectiveTheme === 'light' ? 'hsl(210 100% 50%)' : 'hsl(210 100% 60%)',
-            secondary: effectiveTheme === 'light' ? 'hsl(210 40% 96%)' : 'hsl(210 40% 24%)',
-            accent: effectiveTheme === 'light' ? 'hsl(210 40% 90%)' : 'hsl(210 40% 30%)',
-            radius: 0.75
           }
         };
 
@@ -70,15 +58,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         
         // Update primary theme color and related variables
         root.style.setProperty('--primary', selectedPreset.primary);
-        root.style.setProperty('--primary-foreground', effectiveTheme === 'light' ? 'white' : 'black');
+        root.style.setProperty('--primary-foreground', effectiveTheme === 'light' ? 'hsl(0, 0%, 100%)' : 'hsl(0, 0%, 0%)');
         
         // Update accent colors
         root.style.setProperty('--accent', selectedPreset.accent);
-        root.style.setProperty('--accent-foreground', effectiveTheme === 'light' ? 'black' : 'white');
+        root.style.setProperty('--accent-foreground', effectiveTheme === 'light' ? '0 0% 0%' : '0 0% 100%');
         
         // Update secondary colors
         root.style.setProperty('--secondary', selectedPreset.secondary);
-        root.style.setProperty('--secondary-foreground', effectiveTheme === 'light' ? 'black' : 'white');
+        root.style.setProperty('--secondary-foreground', effectiveTheme === 'light' ? '0 0% 0%' : '0 0% 100%');
+
+        // Update other theme-related variables
+        root.style.setProperty('--background', effectiveTheme === 'light' ? '0 0% 100%' : '0 0% 10%');
+        root.style.setProperty('--foreground', effectiveTheme === 'light' ? '0 0% 0%' : '0 0% 100%');
+        root.style.setProperty('--muted', effectiveTheme === 'light' ? '0 0% 96%' : '0 0% 20%');
+        root.style.setProperty('--muted-foreground', effectiveTheme === 'light' ? '0 0% 45%' : '0 0% 65%');
         
         // Update radius
         root.style.setProperty('--radius', `${selectedPreset.radius}rem`);
