@@ -35,7 +35,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('theme', theme);
     localStorage.setItem('theme-variant', variant);
 
-    // Update theme.json when theme or variant changes
+    // Update theme.json and CSS variables when theme or variant changes
     const updateTheme = async () => {
       try {
         const presets = {
@@ -65,6 +65,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           }
         };
 
+        const selectedPreset = presets[variant];
+        
+        // Update CSS variables
+        root.style.setProperty('--theme-professional', variant === 'professional' ? selectedPreset.primary : '');
+        root.style.setProperty('--theme-vibrant', variant === 'vibrant' ? selectedPreset.primary : '');
+        root.style.setProperty('--theme-minimal', variant === 'minimal' ? selectedPreset.primary : '');
+        root.style.setProperty('--theme-modern', variant === 'modern' ? selectedPreset.primary : '');
+        
+        // Update primary, secondary, and accent colors
+        root.style.setProperty('--primary', selectedPreset.primary);
+        root.style.setProperty('--secondary', selectedPreset.secondary);
+        root.style.setProperty('--accent', selectedPreset.accent);
+        root.style.setProperty('--radius', `${selectedPreset.radius}rem`);
+
+        console.log('Updating theme:', { variant, theme: effectiveTheme, selectedPreset });
+
         await fetch('/api/theme', {
           method: 'POST',
           headers: {
@@ -72,13 +88,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           },
           body: JSON.stringify({
             variant,
-            primary: presets[variant].primary,
-            secondary: presets[variant].secondary,
-            accent: presets[variant].accent,
+            primary: selectedPreset.primary,
+            secondary: selectedPreset.secondary,
+            accent: selectedPreset.accent,
             appearance: theme,
-            radius: presets[variant].radius,
+            radius: selectedPreset.radius,
           }),
-        });
+        }).then(() => console.log('Theme updated successfully'));
       } catch (error) {
         console.error('Failed to update theme:', error);
       }
