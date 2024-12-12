@@ -16,6 +16,27 @@ import { useFile } from "@/lib/file-context"
 import { FileText, Save, FolderOpen, Settings } from "lucide-react"
 
 export function MenuBar() {
+const toggleTerminal = () => {
+  const terminal = document.getElementById('terminal-panel');
+  if (terminal) {
+    const isHidden = terminal.style.display === 'none';
+    terminal.style.display = isHidden ? 'flex' : 'none';
+  }
+};
+
+// Add keyboard shortcut for terminal toggle
+React.useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
+      e.preventDefault();
+      toggleTerminal();
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, []);
+
   const { theme, setTheme, variant, setVariant } = useTheme()
   const { currentFile, setCurrentFile } = useFile()
 
@@ -78,12 +99,7 @@ export function MenuBar() {
       <MenubarMenu>
         <MenubarTrigger className="font-bold">Terminal</MenubarTrigger>
         <MenubarContent>
-          <MenubarItem onClick={() => {
-            const terminal = document.getElementById('terminal-panel');
-            if (terminal) {
-              terminal.style.display = terminal.style.display === 'none' ? 'flex' : 'none';
-            }
-          }}>
+          <MenubarItem onClick={toggleTerminal}>
             Toggle Terminal <MenubarShortcut>⌘J</MenubarShortcut>
           </MenubarItem>
           <MenubarSeparator />
