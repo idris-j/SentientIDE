@@ -39,15 +39,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   const startPort = process.env.PORT ? parseInt(process.env.PORT) : 5000;
 
-  // Find an available port
-  const port = await findAvailablePort(startPort);
-  console.log(`Starting server on port ${port}`);
+  // Find an available port with better error handling
+  let port: number;
+  try {
+    port = await findAvailablePort(startPort);
+    console.log(`Found available port: ${port}`);
+  } catch (error) {
+    console.error('Failed to find available port:', error);
+    throw new Error('Could not start server: no available ports');
+  }
 
   // Create WebSocket server before starting HTTP server
   const wss = new WebSocketServer({ noServer: true });
+  console.log('WebSocket server created');
 
-  // Set up WebSocket handling
-  httpServer.on('upgrade', (request, socket, head) => {
+  // Set up WebSocket handling with improved error handling
+  httpServer.on('upgrade', (request: IncomingMessage, socket, head) => {
     try {
       const pathname = new URL(request.url!, `http://${request.headers.host}`).pathname;
 
@@ -79,38 +86,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Start the server with retries
-  let retryCount = 0;
-  const maxRetries = 3;
+  console.log(`Attempting to start server on port ${port}`);
+  
+  // Start the server with improved error handling
+  // Start the server with improved error handling
+  let isStarting = true;
+  let startupTimeout: NodeJS.Timeout;
 
-  while (retryCount < maxRetries) {
+  // Start the server with improved error handling
+  let isStarting = true;
+  let startupTimeout: NodeJS.Timeout;
+
+  await new Promise<void>((resolve, reject) => {
     try {
-      await new Promise<void>((resolve, reject) => {
-        const server = httpServer.listen(port, '0.0.0.0', () => {
-          console.log(`Server started successfully on port ${port}`);
-          resolve();
-        });
-
-        server.once('error', async (error: any) => {
-          if (error.code === 'EADDRINUSE') {
-            console.log(`Port ${port} is in use, trying next port...`);
-            port++;
-            retryCount++;
-            server.close();
-          } else {
-            console.error('Server failed to start:', error);
-            reject(error);
-          }
-        });
+      console.log(`Attempting to start server on port ${port}`);
+      
+      const server = httpServer.listen(port, '0.0.0.0', () => {
+        if (!isStarting) return; // Prevent multiple resolves
+        isStarting = false;
+        clearTimeout(startupTimeout);
+        console.log(`Server started successfully on port ${port}`);
+        resolve();
       });
-      break; // Successfully started server
+
+      server.once('error', (error: any) => {
+        if (!isStarting) return; // Prevent multiple rejects
+        isStarting = false;
+        clearTimeout(startupTimeout);
+        
+        console.error(`Failed to start server on port ${port}:`, error);
+        if (error.code === 'EADDRINUSE') {
+          console.log('Port is already in use');
+        }
+        reject(error);
+      });
+
+      // Add a timeout to detect if server doesn't start
+      startupTimeout = setTimeout(() => {
+        if (!isStarting) return;
+        isStarting = false;
+        server.close();
+        reject(new Error(`Server failed to start within 5 seconds on port ${port}`));
+      }, 5000);
+
     } catch (error) {
-      if (retryCount === maxRetries - 1) {
-        throw error; // Reached max retries
-      }
-      retryCount++;
+      if (!isStarting) return;
+      isStarting = false;
+      clearTimeout(startupTimeout);
+      console.error('Unexpected error during server startup:', error);
+      reject(error);
     }
-  }
+  });
+
+  console.log('Server initialization completed');
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
@@ -167,7 +195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/sse', (req, res) => {
     try {
       const clientId = Date.now().toString();
-      const headers = {
+      const headers: Record<string, string> = {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
@@ -401,8 +429,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const filePath = path.join(process.cwd(), name);
-      await fs.writeFile(filePath, '', 'utf-8');
-      res.json({ path: name });
+      await fs.writeFile(filePath, '', { encoding: 'utf-8' });
+      res.json({ success: true, path: name, content: '' });
     } catch (error) {
       console.error('Error creating file:', error);
       res.status(500).json({ error: 'Failed to create file' });

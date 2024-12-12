@@ -104,6 +104,16 @@ export function MenuBar() {
       }
 
       const data = await response.json();
+      
+      // Initialize file in Monaco editor with empty content
+      const monaco = (window as any).monaco;
+      if (monaco) {
+        const uri = monaco.Uri.parse(data.path);
+        const model = monaco.editor.getModel(uri) || 
+                     monaco.editor.createModel('', undefined, uri);
+        model.setValue('');
+      }
+      
       addFile(data.path);
       toast({
         title: 'Success',
