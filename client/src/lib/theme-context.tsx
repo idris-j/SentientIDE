@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
 type ThemeAppearance = 'light' | 'dark' | 'system';
-type ThemeVariant = 'professional' | 'vibrant';
+type ThemeVariant = 'professional' | 'vibrant' | 'modern';
 
 interface ThemeContextType {
   theme: ThemeAppearance;
@@ -20,7 +20,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const [variant, setVariant] = useState<ThemeVariant>(() => {
     const storedVariant = localStorage.getItem('theme-variant');
-    return (storedVariant === 'professional' || storedVariant === 'vibrant') ? storedVariant : 'professional';
+    return (storedVariant === 'professional' || storedVariant === 'vibrant' || storedVariant === 'modern') ? storedVariant : 'professional';
   });
 
   useEffect(() => {
@@ -50,6 +50,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             secondary: effectiveTheme === 'light' ? 'hsl(280, 70%, 96%)' : 'hsl(280, 70%, 24%)',
             accent: effectiveTheme === 'light' ? 'hsl(280, 70%, 90%)' : 'hsl(280, 70%, 30%)',
             radius: 1
+          },
+          modern: {
+            primary: effectiveTheme === 'light' ? 'hsl(230, 80%, 50%)' : 'hsl(230, 80%, 60%)',
+            secondary: effectiveTheme === 'light' ? 'hsl(230, 30%, 96%)' : 'hsl(230, 30%, 24%)',
+            accent: effectiveTheme === 'light' ? 'hsl(230, 30%, 90%)' : 'hsl(230, 30%, 30%)',
+            radius: 0.5
           }
         };
 
