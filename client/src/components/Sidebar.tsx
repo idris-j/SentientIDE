@@ -422,15 +422,22 @@ export function Sidebar() {
               Settings
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Settings</DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Customize the appearance and theme style of your application.
+              </p>
             </DialogHeader>
             <div className="py-4 space-y-4">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Appearance</label>
+                  <label className="text-sm font-medium" htmlFor="theme-appearance">Appearance</label>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Choose between light, dark, or system-based theme.
+                  </p>
                   <Select
+                    id="theme-appearance"
                     defaultValue={theme}
                     onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
                   >
@@ -461,8 +468,12 @@ export function Sidebar() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Theme Style</label>
+                  <label className="text-sm font-medium" htmlFor="theme-style">Theme Style</label>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Select a theme style that matches your preferences.
+                  </p>
                   <Select
+                    id="theme-style"
                     defaultValue={variant}
                     onValueChange={(value) => setVariant(value as 'professional' | 'vibrant' | 'minimal' | 'modern')}
                   >
