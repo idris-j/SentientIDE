@@ -4,28 +4,7 @@ import { WebSocketServer } from 'ws';
 import fileUpload from 'express-fileupload';
 import AdmZip from 'adm-zip';
 import path from 'path';
-function analyzeCode(code: string): string {
-  // Basic code analysis
-  const suggestions = [];
-  
-  if (code.includes('var ')) {
-    suggestions.push('Consider using const or let instead of var for better scoping');
-  }
-  
-  if (code.includes('function ') && !code.includes(': ')) {
-    suggestions.push('Add TypeScript type annotations to improve type safety');
-  }
-  
-  if (code.includes('any')) {
-    suggestions.push('Avoid using "any" type, specify a more precise type instead');
-  }
-  
-  if (code.includes('console.log')) {
-    suggestions.push('Remember to remove console.log statements in production code');
-  }
-  
-  return suggestions.join('\n');
-}
+import { analyzeCode, handleQuery } from './services/claude';
 import fs from 'fs/promises';
 
 export function registerRoutes(app: Express): Server {
@@ -57,15 +36,6 @@ export function registerRoutes(app: Express): Server {
       url: request.url,
       protocol: request.headers['sec-websocket-protocol']
     });
-      // Skip handling vite-hmr connections
-      if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
-        return;
-      }
-
-      console.log('WebSocket client connected', {
-        url: request.url,
-        headers: request.headers
-      });
 
     const heartbeat = setInterval(() => {
       if (ws.readyState === ws.OPEN) {
@@ -77,65 +47,16 @@ export function registerRoutes(app: Express): Server {
       try {
         const data = JSON.parse(message.toString());
         const { type, content, currentFile } = data;
+        let response;
 
         if (type === 'analyze') {
-          // Analyze code in real-time
-          const response = {
-            id: Date.now().toString(),
-            type: 'suggestion',
-            content: analyzeCode(content),
-            fileName: currentFile,
-            codeLanguage: 'typescript'
-          };
-          
-          if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify(response));
-          }
+          response = await analyzeCode(content, currentFile);
         } else if (type === 'query') {
-          // For now, provide mock responses based on query content
-          let response;
-          
-          if (content.toLowerCase().includes('improve') || content.toLowerCase().includes('suggest')) {
-            response = {
-              id: Date.now().toString(),
-              type: 'suggestion',
-              content: `// Here's an improved version of your code:
-function improvedFunction() {
-  const result = [];
-  // Add your implementation here
-  return result;
-}`,
-              fileName: currentFile,
-              codeLanguage: 'typescript'
-            };
-          } else if (content.toLowerCase().includes('explain')) {
-            response = {
-              id: Date.now().toString(),
-              type: 'explanation',
-              content: 'This code implements a function that processes data efficiently by using modern JavaScript features like array methods and proper type safety.',
-            };
-          } else if (content.toLowerCase().includes('code') || content.toLowerCase().includes('example')) {
-            response = {
-              id: Date.now().toString(),
-              type: 'code',
-              content: `function exampleCode() {
-  // This is an example implementation
-  const data = [];
-  return data;
-}`,
-              codeLanguage: 'typescript'
-            };
-          } else {
-            response = {
-              id: Date.now().toString(),
-              type: 'text',
-              content: "I can help you with code suggestions, explanations, and examples. Try asking me to improve your code, explain a concept, or show an example.",
-            };
-          }
+          response = await handleQuery(content, currentFile);
+        }
 
-          if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify(response));
-          }
+        if (ws.readyState === ws.OPEN && response) {
+          ws.send(JSON.stringify(response));
         }
       } catch (error) {
         console.error('Error processing message:', error);
