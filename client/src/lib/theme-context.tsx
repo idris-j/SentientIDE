@@ -19,8 +19,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [variant, setVariant] = useState<ThemeVariant>(() => {
-    const storedVariant = localStorage.getItem('theme-variant') as ThemeVariant;
-    return storedVariant || 'professional';
+    const storedVariant = localStorage.getItem('theme-variant');
+    return (storedVariant === 'professional' || storedVariant === 'vibrant') ? storedVariant : 'professional';
   });
 
   useEffect(() => {
@@ -56,16 +56,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         // Update CSS custom properties
         const selectedPreset = presets[variant];
         
+        // Extract HSL values from the color strings
+        const extractHSL = (hslString: string) => {
+          const match = hslString.match(/hsl\(([^)]+)\)/);
+          return match ? match[1] : hslString;
+        };
+
         // Update primary theme color and related variables
-        root.style.setProperty('--primary', selectedPreset.primary);
-        root.style.setProperty('--primary-foreground', effectiveTheme === 'light' ? 'hsl(0, 0%, 100%)' : 'hsl(0, 0%, 0%)');
+        root.style.setProperty('--primary', extractHSL(selectedPreset.primary));
+        root.style.setProperty('--primary-foreground', effectiveTheme === 'light' ? '0 0% 100%' : '0 0% 0%');
         
         // Update accent colors
-        root.style.setProperty('--accent', selectedPreset.accent);
+        root.style.setProperty('--accent', extractHSL(selectedPreset.accent));
         root.style.setProperty('--accent-foreground', effectiveTheme === 'light' ? '0 0% 0%' : '0 0% 100%');
         
         // Update secondary colors
-        root.style.setProperty('--secondary', selectedPreset.secondary);
+        root.style.setProperty('--secondary', extractHSL(selectedPreset.secondary));
         root.style.setProperty('--secondary-foreground', effectiveTheme === 'light' ? '0 0% 0%' : '0 0% 100%');
 
         // Update other theme-related variables
