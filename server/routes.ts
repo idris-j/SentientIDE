@@ -82,7 +82,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Start the server with retries
   let retryCount = 0;
   const maxRetries = 3;
-  
+
   while (retryCount < maxRetries) {
     try {
       await new Promise<void>((resolve, reject) => {
@@ -191,20 +191,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Send initial connection confirmation
-      sendEvent({ 
-        type: 'connection', 
-        status: 'connected', 
+      sendEvent({
+        type: 'connection',
+        status: 'connected',
         clientId,
-        timestamp: Date.now() 
+        timestamp: Date.now()
       });
 
       // Setup heartbeat interval
       const heartbeatInterval = setInterval(() => {
         try {
-          sendEvent({ 
+          sendEvent({
             type: 'heartbeat',
-            clientId, 
-            timestamp: Date.now() 
+            clientId,
+            timestamp: Date.now()
           });
         } catch (error) {
           console.error(`Heartbeat error for client ${clientId}:`, error);
@@ -235,7 +235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Ensure connection isn't dropped by proxy
       res.socket?.setKeepAlive(true);
-      
+
     } catch (error) {
       console.error('Error setting up SSE connection:', error);
       if (!res.headersSent) {
@@ -253,10 +253,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('Processing query:', { content, currentFile });
-      
+
       try {
         const response = await handleQuery(content, currentFile);
-        
+
         // Broadcast response to all connected clients
         clients.forEach(client => {
           try {
@@ -271,14 +271,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (response.type !== 'error') {
           return res.json({ success: true });
         }
-        
+
         // Handle error responses with appropriate status codes
         const statusCode = response.content.includes('rate limit') ? 429 :
-                         response.content.includes('authentication') ? 401 :
-                         response.content.includes('invalid request') ? 400 : 500;
-                         
+          response.content.includes('authentication') ? 401 :
+            response.content.includes('invalid request') ? 400 : 500;
+
         return res.status(statusCode).json({ error: response.content });
-        
+
       } catch (error) {
         if (error instanceof Error && error.message === 'NEED_NEW_API_KEY') {
           return res.status(401).json({
@@ -302,33 +302,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/upload', async (req, res) => {
     try {
       console.log('Upload request received:', req.files);
-      
+
       if (!req.files || !req.files.project) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
       const projectFile = req.files.project;
       const uploadPath = path.join(process.cwd(), 'uploads');
-      
+
       console.log('Creating upload directory:', uploadPath);
       await fs.mkdir(uploadPath, { recursive: true });
-      
+
       if (Array.isArray(projectFile)) {
         return res.status(400).json({ error: 'Multiple file upload not supported' });
       }
 
       const filePath = path.join(uploadPath, projectFile.name);
       console.log('Moving file to:', filePath);
-      
+
       await projectFile.mv(filePath);
       console.log('File uploaded successfully');
 
       res.json({ success: true, filename: projectFile.name });
     } catch (error) {
       console.error('Error uploading file:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: error instanceof Error ? error.message : 'Failed to upload file',
-        details: error 
+        details: error
       });
     }
   });
@@ -337,18 +337,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/files', async (_req, res) => {
     try {
       const rootPath = process.cwd();
-      
+
       const listFilesRecursive = async (dir: string, baseDir: string = ''): Promise<any[]> => {
         const entries = await fs.readdir(dir, { withFileTypes: true });
         const files = await Promise.all(
           entries.map(async (entry) => {
             const relativePath = path.join(baseDir, entry.name);
             const fullPath = path.join(dir, entry.name);
-            
+
             if (entry.name.startsWith('.') || entry.name === 'node_modules') {
               return [];
             }
-            
+
             if (entry.isDirectory()) {
               const children = await listFilesRecursive(fullPath, relativePath);
               return {
@@ -357,17 +357,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 children
               };
             }
-            
+
             return {
               name: entry.name,
               type: 'file'
             };
           })
         );
-        
+
         return files.flat();
       };
-      
+
       const fileList = await listFilesRecursive(rootPath);
       res.json(fileList);
     } catch (error) {
@@ -389,6 +389,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } else {
       console.error('Server error:', error);
+    }
+  });
+
+  // Add new file creation endpoint
+  app.post('/api/files/new', async (req, res) => {
+    try {
+      const { name } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: 'File name is required' });
+      }
+
+      const filePath = path.join(process.cwd(), name);
+      await fs.writeFile(filePath, '', 'utf-8');
+
+      res.json({ path: name });
+    } catch (error) {
+      console.error('Error creating file:', error);
+      res.status(500).json({ error: 'Failed to create file' });
     }
   });
 
