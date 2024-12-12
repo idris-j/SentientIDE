@@ -57,19 +57,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             accent: effectiveTheme === 'light' ? 'hsl(0 0% 90%)' : 'hsl(0 0% 30%)',
             radius: 0.25
           },
-          modern: {
-            primary: effectiveTheme === 'light' ? 'hsl(160 100% 45%)' : 'hsl(160 100% 55%)',
-            secondary: effectiveTheme === 'light' ? 'hsl(160 70% 96%)' : 'hsl(160 70% 24%)',
-            accent: effectiveTheme === 'light' ? 'hsl(160 70% 90%)' : 'hsl(160 70% 30%)',
-            radius: 0.5
+          professional: {
+            primary: effectiveTheme === 'light' ? 'hsl(210 100% 50%)' : 'hsl(210 100% 60%)',
+            secondary: effectiveTheme === 'light' ? 'hsl(210 40% 96%)' : 'hsl(210 40% 24%)',
+            accent: effectiveTheme === 'light' ? 'hsl(210 40% 90%)' : 'hsl(210 40% 30%)',
+            radius: 0.75
           }
         };
 
         // Update CSS custom properties
         const selectedPreset = presets[variant];
-        root.style.setProperty('--theme-primary', selectedPreset.primary);
-        root.style.setProperty('--theme-secondary', selectedPreset.secondary);
-        root.style.setProperty('--theme-accent', selectedPreset.accent);
+        
+        // Update primary theme color and related variables
+        root.style.setProperty('--primary', selectedPreset.primary);
+        root.style.setProperty('--primary-foreground', effectiveTheme === 'light' ? 'white' : 'black');
+        
+        // Update accent colors
+        root.style.setProperty('--accent', selectedPreset.accent);
+        root.style.setProperty('--accent-foreground', effectiveTheme === 'light' ? 'black' : 'white');
+        
+        // Update secondary colors
+        root.style.setProperty('--secondary', selectedPreset.secondary);
+        root.style.setProperty('--secondary-foreground', effectiveTheme === 'light' ? 'black' : 'white');
+        
+        // Update radius
         root.style.setProperty('--radius', `${selectedPreset.radius}rem`);
 
         // Update theme.json through API
