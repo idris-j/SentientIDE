@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 interface Message {
   id: string;
   role: 'user' | 'assistant';
-  type: 'text' | 'code' | 'suggestion' | 'explanation';
+  type: 'text' | 'code' | 'suggestion' | 'explanation' | 'error';
   content: string;
   codeLanguage?: string;
   fileName?: string;
