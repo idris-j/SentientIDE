@@ -11,12 +11,11 @@ app.use(express.urlencoded({ extended: false }));
 // Create WebSocket server for terminal
 const terminalWss = new WebSocketServer({ 
   noServer: true,
-  handleProtocols: (protocols: string[]) => {
-    // Skip vite-hmr protocol
-    if (protocols.includes('vite-hmr')) {
+  handleProtocols: (protocols: Set<string>, request: any) => {
+    if (protocols.has('vite-hmr')) {
       return false;
     }
-    return protocols[0];
+    return Array.from(protocols)[0] || false;
   }
 });
 

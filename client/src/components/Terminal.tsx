@@ -63,28 +63,49 @@ export function Terminal({ className }: TerminalProps) {
     xtermRef.current = term
 
     const connectWebSocket = () => {
-      // Use wss:// for HTTPS connections
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const ws = new WebSocket(`${protocol}//${window.location.host}/terminal`)
-      wsRef.current = ws
-      
-      ws.onopen = () => {
-        console.log("WebSocket connected")
-        term.write("\x1B[1;3;32mTerminal connected.\x1B[0m\r\n$ ")
-      }
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const ws = new WebSocket(`${protocol}//${window.location.host}/terminal`)
+        wsRef.current = ws
+        
+        ws.onopen = () => {
+          console.log("WebSocket connected")
+          term.write("\x1B[1;3;32mTerminal connected.\x1B[0m\r\n$ ")
+          
+          // Send initial size
+          if (xtermRef.current) {
+            ws.send(JSON.stringify({
+              type: "resize",
+              cols: xtermRef.current.cols,
+              rows: xtermRef.current.rows,
+            }))
+          }
+        }
 
-      ws.onclose = () => {
-        console.log("WebSocket disconnected")
-        term.write("\r\n\x1B[1;3;31mTerminal disconnected. Attempting to reconnect...\x1B[0m\r\n")
-        setTimeout(connectWebSocket, 3000)
-      }
+        ws.onclose = (event) => {
+          console.log("WebSocket disconnected", event.code, event.reason)
+          if (!event.wasClean) {
+            term.write("\r\n\x1B[1;3;31mTerminal disconnected. Attempting to reconnect...\x1B[0m\r\n")
+            // Only attempt to reconnect if the terminal is still mounted
+            if (terminalRef.current) {
+              setTimeout(connectWebSocket, 3000)
+            }
+          }
+        }
 
-      ws.onerror = (event) => {
-        console.log("WebSocket error:", event)
-      }
+        ws.onerror = (event) => {
+          console.error("WebSocket error:", event)
+          term.write("\r\n\x1B[1;3;31mTerminal connection error. Please try again.\x1B[0m\r\n")
+        }
 
-      ws.onmessage = (event) => {
-        term.write(event.data)
+        ws.onmessage = (event) => {
+          if (terminalRef.current && event.data) {
+            term.write(event.data)
+          }
+        }
+      } catch (error) {
+        console.error("Failed to establish WebSocket connection:", error)
+        term.write("\r\n\x1B[1;3;31mFailed to connect to terminal server.\x1B[0m\r\n")
       }
     }
 
