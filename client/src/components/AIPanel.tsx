@@ -54,13 +54,18 @@ export function AIPanel() {
     if (!input.trim()) return;
 
     try {
-      // Ensure WebSocket is connected
-      if (!ws) {
-        throw new Error('WebSocket connection not initialized');
+      // Wait for WebSocket connection if not ready
+      let retries = 0;
+      const maxRetries = 3;
+      
+      while ((!ws || ws.readyState !== WebSocket.OPEN) && retries < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        retries++;
       }
 
-      if (ws.readyState !== WebSocket.OPEN) {
-        throw new Error('WebSocket is not connected');
+      // Final check if WebSocket is connected
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        throw new Error('Unable to establish WebSocket connection. Please refresh the page.');
       }
 
       const userMessage: Message = {

@@ -4,9 +4,10 @@ export function useWebSocket() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 10;
+  const maxReconnectAttempts = 3;
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const mountedRef = useRef(true);
 
   const connect = useCallback(() => {
     try {
@@ -103,14 +104,27 @@ export function useWebSocket() {
   }, [isConnected]);
 
   useEffect(() => {
-    connect();
+    mountedRef.current = true;
+    
+    // Initial connection
+    const initConnection = async () => {
+      try {
+        await connect();
+      } catch (error) {
+        console.error('Failed to establish initial WebSocket connection:', error);
+      }
+    };
+    
+    initConnection();
 
+    // Cleanup function
     return () => {
+      mountedRef.current = false;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current) {
-        wsRef.current.close();
+        wsRef.current.close(1000, 'Component unmounted');
         wsRef.current = null;
       }
       setWs(null);
@@ -118,5 +132,6 @@ export function useWebSocket() {
     };
   }, [connect]);
 
-  return ws;
+  // Only return the WebSocket instance when it's actually connected
+  return isConnected ? ws : null;
 }
