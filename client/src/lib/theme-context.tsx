@@ -10,9 +10,22 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark');
+  const [theme, setTheme] = useState<Theme>(() => {
+    const storedTheme = localStorage.getItem('theme') as Theme;
+    return storedTheme || 'system';
+  });
 
   useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+
+    let effectiveTheme: 'light' | 'dark' = theme === 'system' 
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      : theme;
+
+    root.classList.add(effectiveTheme);
+    localStorage.setItem('theme', theme);
+
     // Update theme.json when theme changes
     const updateTheme = async () => {
       try {
@@ -23,7 +36,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           },
           body: JSON.stringify({
             variant: 'professional',
-            primary: theme === 'light' ? 'hsl(210 100% 50%)' : 'hsl(210 100% 50%)',
+            primary: effectiveTheme === 'light' ? 'hsl(210 100% 50%)' : 'hsl(210 100% 60%)',
             appearance: theme,
             radius: 0.75,
           }),
@@ -34,6 +47,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
 
     updateTheme();
+
+    // Listen for system theme changes
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = () => {
+        root.classList.remove('light', 'dark');
+        root.classList.add(mediaQuery.matches ? 'dark' : 'light');
+      };
+      
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
   }, [theme]);
 
   return (
