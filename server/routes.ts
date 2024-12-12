@@ -191,6 +191,75 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ error: 'Failed to list files' });
     }
   });
+  // File operations
+  app.post('/api/files/delete', async (req, res) => {
+    try {
+      const { path: filePath } = req.body;
+      if (!filePath) {
+        return res.status(400).json({ error: 'Path parameter is required' });
+      }
+
+      const absolutePath = path.join(process.cwd(), filePath);
+      await fs.unlink(absolutePath);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      res.status(500).json({ error: 'Failed to delete file' });
+    }
+  });
+
+  app.post('/api/files/duplicate', async (req, res) => {
+    try {
+      const { path: sourcePath } = req.body;
+      if (!sourcePath) {
+        return res.status(400).json({ error: 'Path parameter is required' });
+      }
+
+      const sourceAbsolutePath = path.join(process.cwd(), sourcePath);
+      const ext = path.extname(sourcePath);
+      const basename = path.basename(sourcePath, ext);
+      const dir = path.dirname(sourcePath);
+      let newPath = path.join(dir, `${basename}_copy${ext}`);
+      let counter = 1;
+
+      // Handle case where copy already exists
+      while (fs.existsSync(path.join(process.cwd(), newPath))) {
+        newPath = path.join(dir, `${basename}_copy_${counter}${ext}`);
+        counter++;
+      }
+
+      await fs.copyFile(sourceAbsolutePath, path.join(process.cwd(), newPath));
+      res.json({ success: true, newPath });
+    } catch (error) {
+      console.error('Error duplicating file:', error);
+      res.status(500).json({ error: 'Failed to duplicate file' });
+    }
+  });
+
+  app.post('/api/files/rename', async (req, res) => {
+    try {
+      const { oldPath, newName } = req.body;
+      if (!oldPath || !newName) {
+        return res.status(400).json({ error: 'Both oldPath and newName are required' });
+      }
+
+      const oldAbsolutePath = path.join(process.cwd(), oldPath);
+      const dir = path.dirname(oldPath);
+      const newPath = path.join(dir, newName);
+      const newAbsolutePath = path.join(process.cwd(), newPath);
+
+      if (await fs.exists(newAbsolutePath)) {
+        return res.status(400).json({ error: 'A file with that name already exists' });
+      }
+
+      await fs.rename(oldAbsolutePath, newAbsolutePath);
+      res.json({ success: true, newPath });
+    } catch (error) {
+      console.error('Error renaming file:', error);
+      res.status(500).json({ error: 'Failed to rename file' });
+    }
+  });
+
   app.post('/api/theme', async (req, res) => {
     const { variant, primary, appearance, radius } = req.body;
     try {

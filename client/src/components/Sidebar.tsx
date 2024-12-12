@@ -57,6 +57,96 @@ export function Sidebar() {
     });
   };
 
+  const handleDelete = async (filePath: string) => {
+    try {
+      const response = await fetch('/api/files/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: filePath }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete file');
+      }
+
+      toast({
+        title: 'Success',
+        description: 'File deleted successfully',
+      });
+      
+      fetchFiles();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete file',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDuplicate = async (filePath: string) => {
+    try {
+      const response = await fetch('/api/files/duplicate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: filePath }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to duplicate file');
+      }
+
+      toast({
+        title: 'Success',
+        description: 'File duplicated successfully',
+      });
+      
+      fetchFiles();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to duplicate file',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRename = async (filePath: string) => {
+    try {
+      const newName = prompt('Enter new name:');
+      if (!newName) return;
+
+      const response = await fetch('/api/files/rename', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ oldPath: filePath, newName }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to rename file');
+      }
+
+      toast({
+        title: 'Success',
+        description: 'File renamed successfully',
+      });
+      
+      fetchFiles();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to rename file',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleUnzip = async (filename: string) => {
     try {
       const response = await fetch('/api/unzip', {
@@ -126,6 +216,19 @@ export function Sidebar() {
               <ContextMenuItem onClick={() => handleUnzip(node.name)}>
                 Extract Here
               </ContextMenuItem>
+            )}
+            {node.type === 'file' && (
+              <>
+                <ContextMenuItem onClick={() => handleDuplicate(currentPath)}>
+                  Duplicate
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleDelete(currentPath)}>
+                  Delete
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleRename(currentPath)}>
+                  Rename
+                </ContextMenuItem>
+              </>
             )}
           </ContextMenuContent>
         </ContextMenu>
