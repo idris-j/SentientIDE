@@ -437,12 +437,11 @@ export function Sidebar() {
                     Choose between light, dark, or system-based theme.
                   </p>
                   <Select
-                    value={theme}
-                    onValueChange={(value: string) => {
-                      setTheme(value as 'light' | 'dark' | 'system');
-                    }}
+                    id="theme-appearance"
+                    defaultValue={theme}
+                    onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
                   >
-                    <SelectTrigger aria-label="Select theme appearance">
+                    <SelectTrigger>
                       <SelectValue placeholder="Select appearance" />
                     </SelectTrigger>
                     <SelectContent>
@@ -474,28 +473,18 @@ export function Sidebar() {
                     Select a theme style that matches your preferences.
                   </p>
                   <Select
-                    value={variant}
-                    onValueChange={(value: string) => {
-                      try {
-                        console.log('Changing theme variant to:', value);
-                        setVariant(value as 'professional' | 'vibrant');
-                      } catch (error) {
-                        console.error('Error changing theme:', error);
-                        toast({
-                          title: "Error",
-                          description: "Failed to change theme",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
+                    id="theme-style"
+                    defaultValue={variant}
+                    onValueChange={(value) => setVariant(value as 'professional' | 'vibrant' | 'minimal' | 'modern')}
                   >
-                    <SelectTrigger aria-label="Select theme style">
+                    <SelectTrigger>
                       <SelectValue placeholder="Select style" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="professional">Professional</SelectItem>
                       <SelectItem value="vibrant">Vibrant</SelectItem>
-                      
+                      <SelectItem value="minimal">Minimal</SelectItem>
+                      <SelectItem value="modern">Modern</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
