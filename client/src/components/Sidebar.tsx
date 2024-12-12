@@ -21,7 +21,7 @@ interface FileNode {
 
 export function Sidebar() {
   const { toast } = useToast();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, variant, setVariant } = useTheme();
   const { setCurrentFile } = useFile();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
   const [files, setFiles] = useState<FileNode[]>([]);
@@ -427,36 +427,56 @@ export function Sidebar() {
               <DialogTitle>Settings</DialogTitle>
             </DialogHeader>
             <div className="py-4 space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Theme</label>
-                <Select
-                  defaultValue={theme}
-                  onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select theme" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="light">
-                      <div className="flex items-center gap-2">
-                        <Sun size={16} />
-                        Light
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="dark">
-                      <div className="flex items-center gap-2">
-                        <Moon size={16} />
-                        Dark
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="system">
-                      <div className="flex items-center gap-2">
-                        <Monitor size={16} />
-                        System
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Appearance</label>
+                  <Select
+                    defaultValue={theme}
+                    onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select appearance" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">
+                        <div className="flex items-center gap-2">
+                          <Sun size={16} />
+                          Light
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="dark">
+                        <div className="flex items-center gap-2">
+                          <Moon size={16} />
+                          Dark
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="system">
+                        <div className="flex items-center gap-2">
+                          <Monitor size={16} />
+                          System
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Theme Style</label>
+                  <Select
+                    defaultValue={variant}
+                    onValueChange={(value) => setVariant(value as 'professional' | 'vibrant' | 'minimal' | 'modern')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select style" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="professional">Professional</SelectItem>
+                      <SelectItem value="vibrant">Vibrant</SelectItem>
+                      <SelectItem value="minimal">Minimal</SelectItem>
+                      <SelectItem value="modern">Modern</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </DialogContent>
