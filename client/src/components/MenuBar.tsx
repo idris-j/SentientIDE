@@ -88,12 +88,15 @@ export function MenuBar() {
 
   const handleNewFile = async () => {
     try {
+      const fileName = prompt('Enter file name:', 'untitled.ts');
+      if (!fileName) return;
+
       const response = await fetch('/api/files/new', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: 'untitled.ts' }),
+        body: JSON.stringify({ name: fileName }),
       });
 
       if (!response.ok) {
@@ -110,6 +113,34 @@ export function MenuBar() {
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to create file',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSaveAs = async () => {
+    if (!currentFile) {
+      toast({
+        title: 'Error',
+        description: 'No file is currently open',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const newPath = prompt('Save as:', currentFile);
+      if (!newPath) return;
+
+      await saveFileAs(currentFile, newPath);
+      toast({
+        title: 'Success',
+        description: 'File saved successfully',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to save file',
         variant: 'destructive',
       });
     }
@@ -211,7 +242,7 @@ export function MenuBar() {
             <Save className="mr-2 h-4 w-4" />
             Save <MenubarShortcut>⌘S</MenubarShortcut>
           </MenubarItem>
-          <MenubarItem>Save As... <MenubarShortcut>⇧⌘S</MenubarShortcut></MenubarItem>
+          <MenubarItem onClick={handleSaveAs}>Save As... <MenubarShortcut>⇧⌘S</MenubarShortcut></MenubarItem>
         </MenubarContent>
       </MenubarMenu>
 
