@@ -151,18 +151,40 @@ export function registerRoutes(app: Express): Server {
 
   app.get('/api/files', async (_req, res) => {
     try {
-      const uploadPath = path.join(process.cwd(), 'uploads');
-      const files = await fs.readdir(uploadPath);
+      const rootPath = process.cwd();
       
-      const fileList = await Promise.all(files.map(async (name) => {
-        const filePath = path.join(uploadPath, name);
-        const stats = await fs.stat(filePath);
-        return {
-          name,
-          type: stats.isDirectory() ? 'folder' : 'file'
-        };
-      }));
-
+      async function listFilesRecursive(dir: string, baseDir: string = ''): Promise<any[]> {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        const files = await Promise.all(
+          entries.map(async (entry) => {
+            const relativePath = path.join(baseDir, entry.name);
+            const fullPath = path.join(dir, entry.name);
+            
+            // Skip node_modules and hidden directories
+            if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+              return [];
+            }
+            
+            if (entry.isDirectory()) {
+              const children = await listFilesRecursive(fullPath, relativePath);
+              return {
+                name: entry.name,
+                type: 'folder',
+                children
+              };
+            }
+            
+            return {
+              name: entry.name,
+              type: 'file'
+            };
+          })
+        );
+        
+        return files.flat();
+      }
+      
+      const fileList = await listFilesRecursive(rootPath);
       res.json(fileList);
     } catch (error) {
       console.error('Error listing files:', error);
