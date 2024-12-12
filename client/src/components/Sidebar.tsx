@@ -476,7 +476,7 @@ export function Sidebar() {
                   <Select
                     value={variant}
                     onValueChange={(value: string) => {
-                      setVariant(value as 'professional' | 'vibrant' | 'modern');
+                      setVariant(value as 'professional' | 'vibrant');
                     }}
                   >
                     <SelectTrigger aria-label="Select theme style">
@@ -485,7 +485,6 @@ export function Sidebar() {
                     <SelectContent>
                       <SelectItem value="professional">Professional</SelectItem>
                       <SelectItem value="vibrant">Vibrant</SelectItem>
-                      <SelectItem value="modern">Modern</SelectItem>
                       
                     </SelectContent>
                   </Select>
