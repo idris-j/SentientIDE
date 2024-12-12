@@ -33,27 +33,24 @@ export function FileProvider({ children }: { children: React.ReactNode }) {
     setCurrentFile(path);
   };
 
-  const saveFile = async (path: string) => {
+  const saveFile = async (path: string, content: string = '') => {
     const editor = (window as any).monaco?.editor
       .getModels()
       .find((model: any) => model.uri.path === path);
     
-    if (!editor) {
-      throw new Error('File not found in editor');
-    }
-
-    const content = editor.getValue();
+    const fileContent = editor ? editor.getValue() : content;
     
     const response = await fetch(`/api/files/save`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ path, content }),
+      body: JSON.stringify({ path, content: fileContent }),
     });
 
     if (!response.ok) {
-      throw new Error('Failed to save file');
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to save file');
     }
   };
 
