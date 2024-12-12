@@ -44,11 +44,11 @@ export function registerRoutes(app: Express): Server {
     server: httpServer,
     path: '/ws/ide',
     handleProtocols: (protocols: string[]) => {
-      // Handle vite-hmr protocol
+      if (!protocols || !protocols.length) return '';
       if (protocols.includes('vite-hmr')) {
         return 'vite-hmr';
       }
-      return protocols[0];
+      return protocols[0] || '';
     }
   });
 

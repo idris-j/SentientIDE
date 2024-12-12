@@ -53,22 +53,27 @@ export function AIPanel() {
   const handleSend = async () => {
     if (!input.trim()) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      type: 'text',
-      content: input
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-
     try {
       // Ensure WebSocket is connected
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
+      if (!ws) {
+        throw new Error('WebSocket connection not initialized');
+      }
+
+      if (ws.readyState !== WebSocket.OPEN) {
         throw new Error('WebSocket is not connected');
       }
+
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        type: 'text',
+        content: input
+      };
+
+      // Add user message to the chat
+      setMessages(prev => [...prev, userMessage]);
+      setInput('');
+      setIsLoading(true);
 
       // Send message through WebSocket
       ws.send(JSON.stringify({
@@ -77,9 +82,10 @@ export function AIPanel() {
         currentFile,
       }));
     } catch (error) {
+      console.error('WebSocket error:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to send message. Please try again.',
+        title: 'Connection Error',
+        description: error instanceof Error ? error.message : 'Failed to send message. Please try again.',
         variant: 'destructive',
       });
       setIsLoading(false);
