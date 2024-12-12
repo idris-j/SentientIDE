@@ -9,7 +9,7 @@ interface CodeEditorProps {
 }
 
 export function CodeEditor({ filePath }: CodeEditorProps) {
-  const [content, setContent] = useState<string>('// Loading...');
+  const [content, setContent] = useState<string>('');
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
 
   useEffect(() => {
