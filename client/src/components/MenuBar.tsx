@@ -78,8 +78,14 @@ export function MenuBar() {
       <MenubarMenu>
         <MenubarTrigger className="font-bold">Terminal</MenubarTrigger>
         <MenubarContent>
-          <MenubarItem>New Terminal <MenubarShortcut>⌘⇧`</MenubarShortcut></MenubarItem>
-          <MenubarItem>Split Terminal</MenubarItem>
+          <MenubarItem onClick={() => {
+            const terminal = document.getElementById('terminal-panel');
+            if (terminal) {
+              terminal.style.display = terminal.style.display === 'none' ? 'flex' : 'none';
+            }
+          }}>
+            Toggle Terminal <MenubarShortcut>⌘J</MenubarShortcut>
+          </MenubarItem>
           <MenubarSeparator />
           <MenubarItem>Clear Terminal</MenubarItem>
         </MenubarContent>

@@ -57,12 +57,18 @@ app.use((req, res, next) => {
 
   // Handle WebSocket upgrade requests
   server.on('upgrade', (request, socket, head) => {
-    const pathname = new URL(request.url!, `http://${request.headers.host}`).pathname;
+    try {
+      const protocol = request.headers['x-forwarded-proto'] || 'http';
+      const pathname = new URL(request.url!, `${protocol}://${request.headers.host}`).pathname;
 
-    if (pathname === '/terminal') {
-      terminalWss.handleUpgrade(request, socket, head, (ws) => {
-        terminalWss.emit('connection', ws, request);
-      });
+      if (pathname === '/terminal') {
+        terminalWss.handleUpgrade(request, socket, head, (ws) => {
+          terminalWss.emit('connection', ws, request);
+        });
+      }
+    } catch (error) {
+      console.error('WebSocket upgrade error:', error);
+      socket.destroy();
     }
   });
 
