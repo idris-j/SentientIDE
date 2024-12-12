@@ -91,6 +91,7 @@ export function MenuBar() {
       const fileName = prompt('Enter file name:', 'untitled.ts');
       if (!fileName) return;
 
+      // Create new file on server
       const response = await fetch('/api/files/new', {
         method: 'POST',
         headers: {
@@ -100,18 +101,34 @@ export function MenuBar() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create new file');
+        const error = await response.json();
+        throw new Error(error.details || 'Failed to create new file');
       }
 
       const data = await response.json();
       
-      // Initialize file in Monaco editor with empty content
+      // Initialize Monaco editor model with empty content
       const monaco = (window as any).monaco;
       if (monaco) {
         const uri = monaco.Uri.parse(data.path);
-        const model = monaco.editor.getModel(uri) || 
-                     monaco.editor.createModel('', undefined, uri);
-        model.setValue('');
+        
+        // Always dispose existing model to ensure clean state
+        const existingModel = monaco.editor.getModel(uri);
+        if (existingModel) {
+          existingModel.dispose();
+        }
+
+        // Detect language from file extension
+        const fileExtension = data.path.split('.').pop() || '';
+        const language = monaco.languages.getLanguages()
+          .find((lang: any) => 
+            lang.extensions?.some((ext: string) => 
+              ext.toLowerCase() === `.${fileExtension.toLowerCase()}`
+            )
+          )?.id || 'plaintext';
+
+        // Create new model with empty content
+        monaco.editor.createModel('', language, uri);
       }
       
       addFile(data.path);

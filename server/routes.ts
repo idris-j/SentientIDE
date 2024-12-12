@@ -39,26 +39,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   const startPort = process.env.PORT ? parseInt(process.env.PORT) : 5000;
 
-  // Find an available port with better error handling
-  let port: number;
-  try {
-    port = await findAvailablePort(startPort);
-    console.log(`Found available port: ${port}`);
-  } catch (error) {
-    console.error('Failed to find available port:', error);
-    throw new Error('Could not start server: no available ports');
-  }
-
-  // Create WebSocket server before starting HTTP server
+  // Initialize WebSocket server
   const wss = new WebSocketServer({ noServer: true });
   console.log('WebSocket server created');
 
-  // Set up WebSocket handling with improved error handling
+  // WebSocket upgrade handler
   httpServer.on('upgrade', (request: IncomingMessage, socket, head) => {
     try {
       const pathname = new URL(request.url!, `http://${request.headers.host}`).pathname;
 
-      // Handle Vite HMR separately
       if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
         console.log('Passing vite-hmr connection');
         socket.destroy();
@@ -75,7 +64,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           wss.emit('connection', ws, request);
         });
       } else {
-        console.log(`Invalid WebSocket path: ${pathname}`);
         socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
         socket.destroy();
       }
@@ -86,59 +74,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  console.log(`Attempting to start server on port ${port}`);
-  
-  // Start the server with improved error handling
-  // Start the server with improved error handling
-  let isStarting = true;
-  let startupTimeout: NodeJS.Timeout;
+  // Simple server startup with port handling
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+  console.log(`Starting server on port ${port}`);
 
-  // Start the server with improved error handling
-  let isStarting = true;
-  let startupTimeout: NodeJS.Timeout;
+  try {
+    httpServer.on('error', (error: any) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${port} is already in use`);
+      } else {
+        console.error('Server error:', error);
+      }
+    });
 
-  await new Promise<void>((resolve, reject) => {
-    try {
-      console.log(`Attempting to start server on port ${port}`);
-      
-      const server = httpServer.listen(port, '0.0.0.0', () => {
-        if (!isStarting) return; // Prevent multiple resolves
-        isStarting = false;
-        clearTimeout(startupTimeout);
-        console.log(`Server started successfully on port ${port}`);
-        resolve();
-      });
+    httpServer.on('listening', () => {
+      console.log(`Server started successfully on port ${port}`);
+      console.log('Server initialization completed');
+    });
 
-      server.once('error', (error: any) => {
-        if (!isStarting) return; // Prevent multiple rejects
-        isStarting = false;
-        clearTimeout(startupTimeout);
-        
-        console.error(`Failed to start server on port ${port}:`, error);
-        if (error.code === 'EADDRINUSE') {
-          console.log('Port is already in use');
-        }
-        reject(error);
-      });
-
-      // Add a timeout to detect if server doesn't start
-      startupTimeout = setTimeout(() => {
-        if (!isStarting) return;
-        isStarting = false;
-        server.close();
-        reject(new Error(`Server failed to start within 5 seconds on port ${port}`));
-      }, 5000);
-
-    } catch (error) {
-      if (!isStarting) return;
-      isStarting = false;
-      clearTimeout(startupTimeout);
-      console.error('Unexpected error during server startup:', error);
-      reject(error);
-    }
-  });
-
-  console.log('Server initialization completed');
+    httpServer.listen(port);
+  } catch (error) {
+    console.error('Failed to start server:', error);
+  }
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
@@ -420,7 +377,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add new file creation endpoint
   app.post('/api/files/new', async (req, res) => {
     try {
       const { name } = req.body;
@@ -428,12 +384,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'File name is required' });
       }
 
-      const filePath = path.join(process.cwd(), name);
-      await fs.writeFile(filePath, '', { encoding: 'utf-8' });
-      res.json({ success: true, path: name, content: '' });
+      // Sanitize and validate file path
+      const safeName = path.normalize(name).replace(/^(\.\.[\/\\])+/, '');
+      if (!safeName || safeName.includes('..')) {
+        return res.status(400).json({ error: 'Invalid file path' });
+      }
+
+      const filePath = path.join(process.cwd(), safeName);
+      const dirPath = path.dirname(filePath);
+
+      // Prevent writing outside of project directory
+      if (!filePath.startsWith(process.cwd())) {
+        return res.status(403).json({ error: 'Invalid file location' });
+      }
+
+      // Create directory if it doesn't exist
+      await fs.mkdir(dirPath, { recursive: true });
+
+      // Check if file exists
+      try {
+        await fs.access(filePath);
+        return res.status(409).json({ error: 'File already exists' });
+      } catch {
+        // File doesn't exist, we can proceed
+      }
+
+      // Create empty file with explicit empty string
+      const emptyContent = '';
+      await fs.writeFile(filePath, emptyContent, { encoding: 'utf-8', flag: 'wx' });
+
+      // Double-check the file is empty
+      const content = await fs.readFile(filePath, 'utf-8');
+      if (content !== emptyContent) {
+        // If somehow not empty, truncate it
+        await fs.truncate(filePath, 0);
+      }
+
+      console.log(`Created new empty file: ${safeName}`);
+      res.json({
+        success: true,
+        path: safeName,
+        content: emptyContent
+      });
+
     } catch (error) {
       console.error('Error creating file:', error);
-      res.status(500).json({ error: 'Failed to create file' });
+      res.status(500).json({
+        error: 'Failed to create file',
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
