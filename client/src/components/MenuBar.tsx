@@ -21,17 +21,6 @@ export function MenuBar() {
   const { theme, setTheme, variant, setVariant } = useTheme();
   const { currentFile, setCurrentFile, addFile, saveFile } = useFile();
   
-  const toggleTerminal = () => {
-    const terminal = document.getElementById('terminal-panel');
-    if (terminal) {
-      const currentDisplay = terminal.style.display;
-      const isHidden = currentDisplay === 'none' || currentDisplay === '';
-      terminal.style.display = isHidden ? 'flex' : 'none';
-      
-      // Trigger a resize event to ensure the terminal fits properly
-      window.dispatchEvent(new Event('resize'));
-    }
-  };
 
   const handleNewFile = async () => {
     try {
@@ -126,25 +115,6 @@ export function MenuBar() {
     }
   };
 
-  const clearTerminal = () => {
-    const terminal = document.querySelector('.xterm-screen');
-    if (terminal) {
-      terminal.textContent = '';
-    }
-  };
-
-// Add keyboard shortcut for terminal toggle
-React.useEffect(() => {
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
-      e.preventDefault();
-      toggleTerminal();
-    }
-  };
-
-  window.addEventListener('keydown', handleKeyDown);
-  return () => window.removeEventListener('keydown', handleKeyDown);
-}, []);
 
   return (
     <Menubar className="border-b px-2 lg:px-4">
@@ -213,21 +183,10 @@ React.useEffect(() => {
         <MenubarContent>
           <MenubarItem>Split Editor</MenubarItem>
           <MenubarSeparator />
-          <MenubarItem>Toggle Terminal <MenubarShortcut>⌘J</MenubarShortcut></MenubarItem>
           <MenubarItem>Toggle Sidebar <MenubarShortcut>⌘B</MenubarShortcut></MenubarItem>
         </MenubarContent>
       </MenubarMenu>
 
-      <MenubarMenu>
-        <MenubarTrigger className="font-bold">Terminal</MenubarTrigger>
-        <MenubarContent>
-          <MenubarItem onClick={toggleTerminal}>
-            Toggle Terminal <MenubarShortcut>⌘J</MenubarShortcut>
-          </MenubarItem>
-          <MenubarSeparator />
-          <MenubarItem>Clear Terminal</MenubarItem>
-        </MenubarContent>
-      </MenubarMenu>
     </Menubar>
   )
 }
