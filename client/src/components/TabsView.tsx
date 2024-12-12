@@ -17,50 +17,52 @@ export function TabsView() {
   }
 
   return (
-    <Tabs
-      value={currentFile || undefined}
-      onValueChange={setCurrentFile}
-      className="flex-1 flex flex-col"
-    >
-      <div className="border-b px-1 bg-background">
-        <TabsList className="h-10 w-full justify-start gap-1 bg-transparent p-0">
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <Tabs
+        value={currentFile || undefined}
+        onValueChange={setCurrentFile}
+        className="flex-1 flex flex-col"
+      >
+        <div className="border-b px-1 bg-background">
+          <TabsList className="h-10 w-full justify-start gap-1 bg-transparent p-0">
+            {openFiles.map((file) => (
+              <TabsTrigger
+                key={file}
+                value={file}
+                className={cn(
+                  "relative h-9 rounded-none border-b-2 border-b-transparent px-4 pb-3 pt-2 font-normal hover:bg-muted/30 data-[state=active]:border-b-primary data-[state=active]:bg-muted/40",
+                  "group flex items-center gap-2 text-sm"
+                )}
+              >
+                <span className="truncate max-w-[120px]">
+                  {file.split('/').pop()}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeFile(file);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 hover:text-destructive"
+                >
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close tab</span>
+                </button>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+        <div className="flex-1 relative">
           {openFiles.map((file) => (
-            <TabsTrigger
+            <TabsContent
               key={file}
               value={file}
-              className={cn(
-                "relative h-9 rounded-none border-b-2 border-b-transparent px-4 pb-3 pt-2 font-normal hover:bg-muted/30 data-[state=active]:border-b-primary data-[state=active]:bg-muted/40",
-                "group flex items-center gap-2 text-sm"
-              )}
+              className="absolute inset-0 h-full data-[state=inactive]:hidden"
             >
-              <span className="truncate max-w-[120px]">
-                {file.split('/').pop()}
-              </span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeFile(file);
-                }}
-                className="opacity-0 group-hover:opacity-100 hover:text-destructive"
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close tab</span>
-              </button>
-            </TabsTrigger>
+              <CodeEditor filePath={file} />
+            </TabsContent>
           ))}
-        </TabsList>
-      </div>
-      <div className="flex-1 relative">
-        {openFiles.map((file) => (
-          <TabsContent
-            key={file}
-            value={file}
-            className="absolute inset-0 data-[state=inactive]:hidden"
-          >
-            <CodeEditor filePath={file} />
-          </TabsContent>
-        ))}
-      </div>
-    </Tabs>
+        </div>
+      </Tabs>
+    </div>
   );
 }

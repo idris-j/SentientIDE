@@ -41,7 +41,7 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
   };
 
   return (
-    <Card className="h-full w-full rounded-none border-0 bg-[#1e1e1e]">
+    <Card className="h-full w-full rounded-none border-0 bg-background">
       <Editor
         defaultLanguage="typescript"
         value={content}

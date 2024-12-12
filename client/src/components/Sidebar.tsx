@@ -22,7 +22,7 @@ interface FileNode {
 export function Sidebar() {
   const { toast } = useToast();
   const { theme, setTheme, variant, setVariant } = useTheme();
-  const { setCurrentFile } = useFile();
+  const { setCurrentFile, addFile } = useFile();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
   const [files, setFiles] = useState<FileNode[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
