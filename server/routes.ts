@@ -41,11 +41,25 @@ export function registerRoutes(app: Express): Server {
 
   // Create WebSocket server
   const wss = new WebSocketServer({ 
-    server: httpServer,
-    path: '/ws/ide',
-    verifyClient: (info) => {
-      // Skip vite-hmr protocol
-      return info.req.headers['sec-websocket-protocol'] !== 'vite-hmr';
+    noServer: true
+  });
+
+  // Handle upgrade requests
+  httpServer.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url!, `http://${request.headers.host}`).pathname;
+
+    if (pathname === '/ws/ide') {
+      if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
+        socket.destroy();
+        return;
+      }
+
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        console.log('WebSocket connection established');
+        wss.emit('connection', ws, request);
+      });
+    } else {
+      socket.destroy();
     }
   });
 

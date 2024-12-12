@@ -10,12 +10,21 @@ export function useWebSocket() {
 
   const connect = useCallback(() => {
     try {
-      // Clear any existing connection
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+      if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+        console.log('WebSocket connection already in progress');
+        return;
       }
 
+      // Close existing connection if any
+      if (wsRef.current) {
+        console.log('Closing existing WebSocket connection');
+        wsRef.current.close();
+        wsRef.current = null;
+        setWs(null);
+        setIsConnected(false);
+      }
+
+      console.log('Initializing WebSocket connection...');
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const socket = new WebSocket(`${protocol}//${window.location.host}/ws/ide`);
       wsRef.current = socket;
@@ -53,17 +62,28 @@ export function useWebSocket() {
           clearTimeout(reconnectTimeoutRef.current);
         }
 
-        // Implement exponential backoff for reconnection
-        if (reconnectAttempts.current < maxReconnectAttempts) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
-          reconnectAttempts.current++;
-          
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (!isConnected) {
-              connect();
-            }
-          }, delay);
+        // Only attempt reconnection if it wasn't a clean close
+        if (event.code !== 1000 && event.code !== 1001) {
+          // Implement exponential backoff for reconnection
+          if (reconnectAttempts.current < maxReconnectAttempts) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
+            reconnectAttempts.current++;
+            console.log(`Attempting reconnection in ${delay}ms (attempt ${reconnectAttempts.current})`);
+            
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (!isConnected) {
+                connect();
+              }
+            }, delay);
+          } else {
+            console.error('Max reconnection attempts reached');
+          }
         }
+      };
+
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        // Don't close the socket here, let the onclose handler handle reconnection
       };
 
       socket.onerror = (error) => {
