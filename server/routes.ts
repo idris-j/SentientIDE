@@ -41,24 +41,29 @@ export function registerRoutes(app: Express): Server {
 
   // Create WebSocket server with a specific path
   const wss = new WebSocketServer({ 
-    server: httpServer,
-    path: '/ws/ide',
-    handleProtocols: (protocols: string[]) => {
-      if (!protocols || !protocols.length) return '';
-      if (protocols.includes('vite-hmr')) {
-        return 'vite-hmr';
-      }
-      return protocols[0] || '';
+    noServer: true,
+    path: '/ws/ide'
+  });
+
+  // Handle upgrade requests
+  httpServer.on('upgrade', (request, socket, head) => {
+    if (request.url === '/ws/ide') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
     }
   });
 
   wss.on('connection', (ws, request) => {
-    // Skip handling vite-hmr connections
-    if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
-      return;
-    }
+      // Skip handling vite-hmr connections
+      if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
+        return;
+      }
 
-    console.log('WebSocket client connected');
+      console.log('WebSocket client connected', {
+        url: request.url,
+        headers: request.headers
+      });
 
     const heartbeat = setInterval(() => {
       if (ws.readyState === ws.OPEN) {
