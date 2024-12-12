@@ -36,35 +36,55 @@ async function findAvailablePort(startPort: number, maxAttempts: number = 10): P
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  let port = process.env.PORT ? parseInt(process.env.PORT) : 5000;
   const httpServer = createServer(app);
+  const startPort = process.env.PORT ? parseInt(process.env.PORT) : 5000;
 
-  // Try to start the server on the specified port or find an available one
-  while (true) {
+  // Find an available port
+  const port = await findAvailablePort(startPort);
+  console.log(`Starting server on port ${port}`);
+
+  // Create WebSocket server before starting HTTP server
+  const wss = new WebSocketServer({ noServer: true });
+
+  // Set up WebSocket handling
+  httpServer.on('upgrade', (request, socket, head) => {
     try {
-      await new Promise((resolve, reject) => {
-        httpServer.listen(port, '0.0.0.0')
-          .once('listening', () => {
-            console.log(`Server started successfully on port ${port}`);
-            resolve(true);
-          })
-          .once('error', (error) => {
-            if (error.code === 'EADDRINUSE') {
-              console.log(`Port ${port} is in use, trying next port...`);
-              port++;
-              httpServer.close();
-              resolve(false);
-            } else {
-              reject(error);
-            }
-          });
-      });
-      break;
+      const pathname = new URL(request.url!, `http://${request.headers.host}`).pathname;
+
+      // Handle Vite HMR separately
+      if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
+        console.log('Passing vite-hmr connection');
+        socket.destroy();
+        return;
+      }
+
+      if (pathname === '/terminal') {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          console.log('Terminal WebSocket connection established');
+          handleTerminal(ws);
+        });
+      } else {
+        console.log(`Invalid WebSocket path: ${pathname}`);
+        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+        socket.destroy();
+      }
     } catch (error) {
-      console.error('Failed to start server:', error);
-      throw error;
+      console.error('Error in WebSocket upgrade:', error);
+      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+      socket.destroy();
     }
-  }
+  });
+
+  // Start the server
+  await new Promise<void>((resolve, reject) => {
+    httpServer.listen(port, '0.0.0.0', () => {
+      console.log(`Server started successfully on port ${port}`);
+      resolve();
+    }).once('error', (error) => {
+      console.error('Server failed to start:', error);
+      reject(error);
+    });
+  });
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
@@ -121,75 +141,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/sse', (req, res) => {
     try {
       const clientId = Date.now().toString();
-      console.log(`New SSE connection attempt (${clientId})`);
-
-      // Set SSE headers with appropriate CORS and caching directives
-      res.writeHead(200, {
+      const headers = {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Credentials': 'true'
-      });
+        'X-Accel-Buffering': 'no'
+      };
 
-      // Cleanup any existing zombied connection for this client
-      Array.from(clients).forEach(client => {
-        if (!client.writableEnded && client.finished) {
-          console.log('Cleaning up stale SSE connection');
-          clients.delete(client);
+      // Add CORS headers if needed
+      const origin = req.headers.origin;
+      if (origin) {
+        headers['Access-Control-Allow-Origin'] = origin;
+        headers['Access-Control-Allow-Credentials'] = 'true';
+      }
+
+      res.writeHead(200, headers);
+
+      // Helper function to send SSE messages
+      const sendEvent = (data: any) => {
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify(data)}\n\n`);
         }
-      });
+      };
 
-      // Send initial connection message
-      const initialMessage = JSON.stringify({ 
+      // Send initial connection confirmation
+      sendEvent({ 
         type: 'connection', 
         status: 'connected', 
         clientId,
         timestamp: Date.now() 
       });
-      res.write(`data: ${initialMessage}\n\n`);
 
-      // Setup heartbeat interval with error handling
+      // Setup heartbeat interval
       const heartbeatInterval = setInterval(() => {
         try {
-          if (!res.writableEnded) {
-            const heartbeat = JSON.stringify({ 
-              type: 'heartbeat',
-              clientId, 
-              timestamp: Date.now() 
-            });
-            res.write(`data: ${heartbeat}\n\n`);
-          } else {
-            throw new Error('Connection ended');
-          }
+          sendEvent({ 
+            type: 'heartbeat',
+            clientId, 
+            timestamp: Date.now() 
+          });
         } catch (error) {
-          console.error(`Error sending SSE heartbeat to client ${clientId}:`, error);
-          clearInterval(heartbeatInterval);
-          clients.delete(res);
+          console.error(`Heartbeat error for client ${clientId}:`, error);
+          cleanup();
         }
-      }, 30000); // Send heartbeat every 30 seconds
+      }, 30000);
 
-      // Add client to the set
+      // Cleanup function
+      const cleanup = () => {
+        clearInterval(heartbeatInterval);
+        clients.delete(res);
+        if (!res.writableEnded) {
+          res.end();
+        }
+        console.log(`Client ${clientId} disconnected from SSE`);
+      };
+
+      // Add client to active connections
       clients.add(res);
       console.log(`Client ${clientId} connected to SSE`);
 
-      // Handle client disconnection
-      req.on('close', () => {
-        clearInterval(heartbeatInterval);
-        clients.delete(res);
-        console.log(`Client ${clientId} disconnected from SSE`);
+      // Handle client disconnect
+      req.on('close', cleanup);
+      res.on('error', (error) => {
+        console.error(`SSE error for client ${clientId}:`, error);
+        cleanup();
       });
 
-      // Handle errors
-      res.on('error', (error) => {
-        console.error(`SSE Response error for client ${clientId}:`, error);
-        clearInterval(heartbeatInterval);
-        clients.delete(res);
-      });
+      // Ensure connection isn't dropped by proxy
+      res.socket?.setKeepAlive(true);
+      
     } catch (error) {
       console.error('Error setting up SSE connection:', error);
-      res.status(500).end();
+      if (!res.headersSent) {
+        res.status(500).end();
+      }
     }
   });
 
@@ -204,7 +229,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Processing query:', { content, currentFile });
       const response = await handleQuery(content, currentFile);
       
-      // Broadcast response to all connected clients
+      // Check if it's an error response
+      if (response.type === 'error') {
+        // Still send the error message through SSE for real-time feedback
+        clients.forEach(client => {
+          try {
+            client.write(`data: ${JSON.stringify(response)}\n\n`);
+          } catch (error) {
+            console.error('Error sending SSE message:', error);
+            clients.delete(client);
+          }
+        });
+        
+        // Send appropriate status code based on error
+        return res.status(response.content.includes('account limits') ? 402 : 500)
+          .json({ error: response.content });
+      }
+      
+      // Broadcast success response to all connected clients
       clients.forEach(client => {
         try {
           client.write(`data: ${JSON.stringify(response)}\n\n`);
@@ -217,125 +259,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error('Error processing query:', error);
-      res.status(500).json({ error: 'Failed to process query' });
-    }
-  });
-
-  // Create WebSocket server for terminal connections only
-  const terminalWss = new WebSocketServer({ 
-    noServer: true,
-    clientTracking: true,
-    maxPayload: 50 * 1024 * 1024 // 50MB max payload
-  });
-
-  // Handle WebSocket upgrade requests for terminal only
-  httpServer.on('upgrade', (request: IncomingMessage, socket, head) => {
-    try {
-      const protocol = request.headers['x-forwarded-proto'] || 'http';
-      const pathname = new URL(request.url!, `${protocol}://${request.headers.host}`).pathname;
-
-      // Skip vite-hmr connections
-      if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
-        console.log('Skipping vite-hmr connection');
-        socket.destroy();
-        return;
-      }
-
-      if (pathname === '/terminal') {
-        console.log('Handling terminal WebSocket upgrade');
-        terminalWss.handleUpgrade(request, socket, head, handleTerminal);
-      } else {
-        console.log(`Invalid WebSocket path: ${pathname}`);
-        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
-        socket.destroy();
-      }
-    } catch (error) {
-      console.error('Error in WebSocket upgrade:', error);
-      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
-      socket.destroy();
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process query';
+      res.status(500).json({ error: errorMessage });
     }
   });
 
   // WebSocket connection tracking
   const wsClients = new Map();
-
-  // Terminal WebSocket server error handling
-  terminalWss.on('error', (error) => {
-    console.error('Terminal WebSocket server error:', error);
-    // Notify all connected clients about the error
-    Array.from(wsClients.entries()).forEach(([id, client]) => {
-      try {
-        client.ws.send(JSON.stringify({ type: 'error', message: 'Server error occurred' }));
-      } catch (e) {
-        console.error(`Error notifying client ${id}:`, e);
-      }
-    });
-  });
-
-  terminalWss.on('close', () => {
-    console.log('Terminal WebSocket server closed');
-    // Clean up all client connections
-    Array.from(wsClients.entries()).forEach(([id, client]) => {
-      try {
-        client.ws.close(1012, 'Server is shutting down');
-        wsClients.delete(id);
-      } catch (e) {
-        console.error(`Error closing client ${id}:`, e);
-      }
-    });
-  });
-
-  // Enhanced WebSocket connection handler
-  terminalWss.on('connection', (ws, request) => {
-    const clientId = Date.now().toString();
-    const heartbeatInterval = setInterval(() => {
-      if (ws.readyState === ws.OPEN) {
-        try {
-          ws.ping();
-        } catch (error) {
-          console.error(`Error sending ping to client ${clientId}:`, error);
-          clearInterval(heartbeatInterval);
-          wsClients.delete(clientId);
-          try {
-            ws.close(1011, 'Server internal error');
-          } catch (e) {
-            console.error('Error closing WebSocket:', e);
-          }
-        }
-      }
-    }, 30000);
-
-    wsClients.set(clientId, { 
-      ws,
-      connectedAt: Date.now(),
-      heartbeatInterval
-    });
-
-    ws.on('pong', () => {
-      // Update last pong time
-      const client = wsClients.get(clientId);
-      if (client) {
-        client.lastPong = Date.now();
-      }
-    });
-
-    ws.on('error', (error) => {
-      console.error(`WebSocket error for client ${clientId}:`, error);
-      clearInterval(heartbeatInterval);
-      wsClients.delete(clientId);
-      try {
-        ws.close(1011, 'Server internal error');
-      } catch (e) {
-        console.error('Error closing WebSocket:', e);
-      }
-    });
-
-    ws.on('close', (code, reason) => {
-      console.log(`Client ${clientId} disconnected:`, code, reason);
-      clearInterval(heartbeatInterval);
-      wsClients.delete(clientId);
-    });
-  });
 
   // File upload endpoint
   app.post('/api/upload', async (req, res) => {

@@ -55,10 +55,31 @@ export async function handleQuery(query: string, currentFile: string | null): Pr
     return {
       id: Date.now().toString(),
       type: 'text',
-      content: response.content[0].text
+      content: response.content[0].text || 'No response received from AI'
     };
   } catch (error) {
     console.error('Error querying Claude:', error);
-    throw error;
+    
+    // Handle specific API errors
+    if (error.status === 400 && error.error?.error?.message?.includes('credit balance')) {
+      return {
+        id: Date.now().toString(),
+        type: 'error',
+        content: 'The AI service is currently unavailable due to account limits. Please try again later.'
+      };
+    } else if (error.status === 401 || error.status === 403) {
+      return {
+        id: Date.now().toString(),
+        type: 'error',
+        content: 'Authentication error with the AI service. Please check your API key configuration.'
+      };
+    }
+    
+    // Generic error fallback
+    return {
+      id: Date.now().toString(),
+      type: 'error',
+      content: 'Failed to get response from AI. Please try again later.'
+    };
   }
 }

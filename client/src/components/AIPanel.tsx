@@ -24,7 +24,112 @@ export function AIPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { eventSource, sendMessage } = useEventSource();
+  const [eventSource, setEventSource] = useState<EventSource | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [reconnectTimer, setReconnectTimer] = useState<NodeJS.Timeout | null>(null);
+  const maxRetries = 3;
+  const retryCount = useRef(0);
+
+  const setupEventSource = useCallback(() => {
+    if (eventSource) {
+      eventSource.close();
+    }
+
+    const newEventSource = new EventSource('/api/sse');
+    
+    newEventSource.onopen = () => {
+      console.log('SSE connection established');
+      setIsConnected(true);
+      retryCount.current = 0;
+    };
+
+    newEventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'connection') {
+          console.log('SSE connection status:', data.status);
+          return;
+        }
+        
+        setMessages(prev => [...prev, {
+          id: data.id,
+          role: 'assistant',
+          type: data.type,
+          content: data.content,
+          codeLanguage: data.codeLanguage,
+          fileName: data.fileName
+        }]);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error processing message:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to process message from server',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+      }
+    };
+
+    newEventSource.onerror = (error) => {
+      console.error('SSE error:', error);
+      setIsConnected(false);
+      newEventSource.close();
+      
+      if (retryCount.current < maxRetries) {
+        const timeout = setTimeout(() => {
+          retryCount.current++;
+          console.log(`Retrying SSE connection (${retryCount.current}/${maxRetries})`);
+          setupEventSource();
+        }, 2000 * Math.pow(2, retryCount.current));
+        
+        setReconnectTimer(timeout);
+      } else {
+        toast({
+          title: 'Connection Error',
+          description: 'Failed to establish connection after multiple attempts',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    setEventSource(newEventSource);
+  }, [toast]);
+
+  useEffect(() => {
+    setupEventSource();
+    
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+    };
+  }, [setupEventSource]);
+
+  const sendMessage = async (content: string, currentFile: string | null) => {
+    try {
+      const response = await fetch('/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content, currentFile }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to send message');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
+    }
+  };
   const { currentFile, addFile } = useFile();
 
   useEffect(() => {
@@ -98,13 +203,36 @@ export function AIPanel() {
       setInput('');
       setIsLoading(true);
 
-      // Send message through HTTP POST
-      await sendMessage(input, currentFile);
+      try {
+        // Send message through HTTP POST
+        await sendMessage(input, currentFile);
+      } catch (error: any) {
+        console.error('AI Service error:', error);
+        
+        // Add error message to chat
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          type: 'error',
+          content: error.response?.data?.error || 
+                  'Failed to get response from AI. Please try again later.'
+        }]);
+        
+        // Show toast notification
+        toast({
+          title: 'AI Service Error',
+          description: error.response?.data?.error || 
+                      'Failed to get response from AI. Please try again later.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
     } catch (error) {
-      console.error('WebSocket error:', error);
+      console.error('Message handling error:', error);
       toast({
-        title: 'Connection Error',
-        description: error instanceof Error ? error.message : 'Failed to send message. Please try again.',
+        title: 'Error',
+        description: 'Failed to process message. Please try again.',
         variant: 'destructive',
       });
       setIsLoading(false);
