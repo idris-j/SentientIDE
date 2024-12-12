@@ -9,11 +9,19 @@ import fs from 'fs/promises';
 export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
 
+  // Configure file upload middleware
+  app.use(fileUpload({
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+    useTempFiles: true,
+    tempFileDir: '/tmp/',
+    debug: true
+  }));
+
   // Create WebSocket server with a specific path
   const wss = new WebSocketServer({ 
     server: httpServer,
     path: '/ws/ide',
-    handleProtocols: (protocols, request) => {
+    handleProtocols: (protocols: string[]) => {
       // Handle vite-hmr protocol
       if (protocols.includes('vite-hmr')) {
         return 'vite-hmr';
@@ -71,10 +79,7 @@ export function registerRoutes(app: Express): Server {
       console.error('WebSocket error:', error);
       clearInterval(heartbeat);
     });
-  // File upload endpoint
-  app.use(fileUpload({
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
-  }));
+  });
 
   app.post('/api/upload', async (req, res) => {
     try {
@@ -127,9 +132,7 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ error: 'Failed to unzip file' });
     }
   });
-  });
 
-  // API routes
   app.post('/api/theme', async (req, res) => {
     const { variant, primary, appearance, radius } = req.body;
     try {
