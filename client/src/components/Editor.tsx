@@ -35,9 +35,18 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
     // Add editor change listener
     editor.onDidChangeModelContent(() => {
       const value = editor.getValue();
-      // Trigger AI analysis here
-      console.log('Code changed:', value);
+      // Trigger AI analysis via WebSocket
+      if (window.aiWebSocket?.readyState === WebSocket.OPEN) {
+        window.aiWebSocket.send(JSON.stringify({
+          type: 'analyze',
+          content: value,
+          fileName: filePath
+        }));
+      }
     });
+
+    // Make editor instance globally accessible
+    (window as any).monaco.editor.setCurrentEditor(editor);
   };
 
   return (

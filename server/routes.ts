@@ -4,6 +4,28 @@ import { WebSocketServer } from 'ws';
 import fileUpload from 'express-fileupload';
 import AdmZip from 'adm-zip';
 import path from 'path';
+function analyzeCode(code: string): string {
+  // Basic code analysis
+  const suggestions = [];
+  
+  if (code.includes('var ')) {
+    suggestions.push('Consider using const or let instead of var for better scoping');
+  }
+  
+  if (code.includes('function ') && !code.includes(': ')) {
+    suggestions.push('Add TypeScript type annotations to improve type safety');
+  }
+  
+  if (code.includes('any')) {
+    suggestions.push('Avoid using "any" type, specify a more precise type instead');
+  }
+  
+  if (code.includes('console.log')) {
+    suggestions.push('Remember to remove console.log statements in production code');
+  }
+  
+  return suggestions.join('\n');
+}
 import fs from 'fs/promises';
 
 export function registerRoutes(app: Express): Server {
@@ -49,7 +71,20 @@ export function registerRoutes(app: Express): Server {
         const data = JSON.parse(message.toString());
         const { type, content, currentFile } = data;
 
-        if (type === 'query') {
+        if (type === 'analyze') {
+          // Analyze code in real-time
+          const response = {
+            id: Date.now().toString(),
+            type: 'suggestion',
+            content: analyzeCode(content),
+            fileName: currentFile,
+            codeLanguage: 'typescript'
+          };
+          
+          if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify(response));
+          }
+        } else if (type === 'query') {
           // For now, provide mock responses based on query content
           let response;
           
