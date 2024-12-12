@@ -35,9 +35,10 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
     // Add editor change listener
     editor.onDidChangeModelContent(() => {
       const value = editor.getValue();
-      // Trigger AI analysis via WebSocket
-      if (window.aiWebSocket?.readyState === WebSocket.OPEN) {
-        window.aiWebSocket.send(JSON.stringify({
+      // Get the WebSocket instance from window
+      const ws = (window as any).aiWebSocket;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
           type: 'analyze',
           content: value,
           fileName: filePath
@@ -45,8 +46,14 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
       }
     });
 
-    // Make editor instance globally accessible
-    (window as any).monaco.editor.setCurrentEditor(editor);
+    // Store editor instance in a way that's accessible to other components
+    (window as any).monaco = {
+      ...(window as any).monaco,
+      editor: {
+        ...(window as any).monaco?.editor,
+        getActiveEditor: () => editor
+      }
+    };
   };
 
   return (

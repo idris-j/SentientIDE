@@ -51,7 +51,7 @@ export function AIPanel() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || !ws) return;
+    if (!input.trim()) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -64,16 +64,30 @@ export function AIPanel() {
     setInput('');
     setIsLoading(true);
 
-    // Send message through WebSocket
-    ws.send(JSON.stringify({
-      type: 'query',
-      content: input,
-      currentFile,
-    }));
+    try {
+      // Ensure WebSocket is connected
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        throw new Error('WebSocket is not connected');
+      }
+
+      // Send message through WebSocket
+      ws.send(JSON.stringify({
+        type: 'query',
+        content: input,
+        currentFile,
+      }));
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to send message. Please try again.',
+        variant: 'destructive',
+      });
+      setIsLoading(false);
+    }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
       e.preventDefault();
       handleSend();
     }
