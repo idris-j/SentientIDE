@@ -35,7 +35,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('theme', theme);
     localStorage.setItem('theme-variant', variant);
 
-    // Update theme.json when theme or variant changes
+    // Update theme.json and CSS variables when theme or variant changes
     const updateTheme = async () => {
       try {
         const presets = {
@@ -65,6 +65,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           }
         };
 
+        // Update CSS custom properties
+        const selectedPreset = presets[variant];
+        root.style.setProperty('--theme-primary', selectedPreset.primary);
+        root.style.setProperty('--theme-secondary', selectedPreset.secondary);
+        root.style.setProperty('--theme-accent', selectedPreset.accent);
+        root.style.setProperty('--radius', `${selectedPreset.radius}rem`);
+
+        // Update theme.json through API
         await fetch('/api/theme', {
           method: 'POST',
           headers: {
@@ -72,11 +80,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           },
           body: JSON.stringify({
             variant,
-            primary: presets[variant].primary,
-            secondary: presets[variant].secondary,
-            accent: presets[variant].accent,
+            primary: selectedPreset.primary,
+            secondary: selectedPreset.secondary,
+            accent: selectedPreset.accent,
             appearance: theme,
-            radius: presets[variant].radius,
+            radius: selectedPreset.radius,
           }),
         });
       } catch (error) {
@@ -92,12 +100,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const handleChange = () => {
         root.classList.remove('light', 'dark');
         root.classList.add(mediaQuery.matches ? 'dark' : 'light');
+        updateTheme(); // Update theme when system preference changes
       };
       
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     }
-  }, [theme]);
+  }, [theme, variant]); // Added variant to dependency array
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, variant, setVariant }}>
