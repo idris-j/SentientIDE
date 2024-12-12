@@ -4,18 +4,25 @@ export function useWebSocket() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = 10; // Increased max attempts
   const baseReconnectDelay = 1000;
+  const wsRef = useRef<WebSocket | null>(null);
 
   const connect = useCallback(() => {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+        return; // Don't create a new connection if one is pending
+      }
+
       const socket = new WebSocket(`${protocol}//${window.location.host}/ws/ide`);
+      wsRef.current = socket;
 
       socket.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('WebSocket connected successfully');
         setIsConnected(true);
         reconnectAttempts.current = 0;
+        setWs(socket);
         // Store the WebSocket instance globally for the editor to use
         (window as any).aiWebSocket = socket;
       };
