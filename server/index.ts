@@ -1,10 +1,26 @@
 import express, { type Request, Response, NextFunction } from "express";
+import { WebSocketServer } from 'ws';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { handleTerminal } from "./terminal";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Create WebSocket server for terminal
+const terminalWss = new WebSocketServer({ 
+  noServer: true,
+  handleProtocols: (protocols: string[]) => {
+    // Skip vite-hmr protocol
+    if (protocols.includes('vite-hmr')) {
+      return false;
+    }
+    return protocols[0];
+  }
+});
+
+terminalWss.on('connection', handleTerminal);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -38,6 +54,17 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = registerRoutes(app);
+
+  // Handle WebSocket upgrade requests
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url!, `http://${request.headers.host}`).pathname;
+
+    if (pathname === '/terminal') {
+      terminalWss.handleUpgrade(request, socket, head, (ws) => {
+        terminalWss.emit('connection', ws, request);
+      });
+    }
+  });
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
