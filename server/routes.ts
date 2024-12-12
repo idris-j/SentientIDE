@@ -254,12 +254,15 @@ export function registerRoutes(app: Express): Server {
       const newPath = path.join(dir, newName);
       const newAbsolutePath = path.join(process.cwd(), newPath);
 
-      if (await fs.exists(newAbsolutePath)) {
+      try {
+        await fs.access(newAbsolutePath);
         return res.status(400).json({ error: 'A file with that name already exists' });
-      }
+      } catch {
+        // File doesn't exist, we can proceed with rename
 
       await fs.rename(oldAbsolutePath, newAbsolutePath);
-      res.json({ success: true, newPath });
+        res.json({ success: true, newPath });
+      }
     } catch (error) {
       console.error('Error renaming file:', error);
       res.status(500).json({ error: 'Failed to rename file' });
