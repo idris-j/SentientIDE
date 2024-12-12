@@ -1,11 +1,11 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useEventSource } from '@/lib/websocket';
 import { useFile } from '@/lib/file-context';
-import { Send, Code, Copy, Check } from 'lucide-react';
+import { Send, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -26,9 +26,7 @@ export function AIPanel() {
   const { toast } = useToast();
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [reconnectTimer, setReconnectTimer] = useState<NodeJS.Timeout | null>(null);
-  const maxRetries = 3;
-  const retryCount = useRef(0);
+  const { currentFile } = useFile();
 
   const setupEventSource = useCallback(() => {
     if (eventSource) {
@@ -40,7 +38,6 @@ export function AIPanel() {
     newEventSource.onopen = () => {
       console.log('SSE connection established');
       setIsConnected(true);
-      retryCount.current = 0;
     };
 
     newEventSource.onmessage = (event) => {
@@ -52,7 +49,7 @@ export function AIPanel() {
         }
         
         setMessages(prev => [...prev, {
-          id: data.id,
+          id: `${Date.now()}-${Math.random()}`,
           role: 'assistant',
           type: data.type,
           content: data.content,
@@ -71,40 +68,30 @@ export function AIPanel() {
       }
     };
 
-    newEventSource.onerror = (error) => {
-      console.error('SSE error:', error);
+    newEventSource.onerror = () => {
+      console.error('SSE connection error');
       setIsConnected(false);
       newEventSource.close();
       
-      if (retryCount.current < maxRetries) {
-        const timeout = setTimeout(() => {
-          retryCount.current++;
-          console.log(`Retrying SSE connection (${retryCount.current}/${maxRetries})`);
-          setupEventSource();
-        }, 2000 * Math.pow(2, retryCount.current));
-        
-        setReconnectTimer(timeout);
-      } else {
-        toast({
-          title: 'Connection Error',
-          description: 'Failed to establish connection after multiple attempts',
-          variant: 'destructive',
-        });
-      }
+      toast({
+        title: 'Connection Error',
+        description: 'Lost connection to server. Please refresh the page.',
+        variant: 'destructive',
+      });
     };
 
     setEventSource(newEventSource);
+
+    return () => {
+      newEventSource.close();
+    };
   }, [toast]);
 
   useEffect(() => {
     setupEventSource();
-    
     return () => {
       if (eventSource) {
         eventSource.close();
-      }
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
       }
     };
   }, [setupEventSource]);
@@ -121,6 +108,14 @@ export function AIPanel() {
 
       if (!response.ok) {
         const data = await response.json();
+        if (data.needNewKey) {
+          toast({
+            title: 'API Key Required',
+            description: 'Please set up your Claude API key in the environment variables.',
+            variant: 'destructive',
+          });
+          return { success: false, needNewKey: true };
+        }
         throw new Error(data.error || 'Failed to send message');
       }
 
@@ -130,134 +125,31 @@ export function AIPanel() {
       throw error;
     }
   };
-  const { currentFile, addFile } = useFile();
-
-  useEffect(() => {
-    if (eventSource) {
-      const messageHandler = (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'connection') {
-            console.log('SSE connection status:', data.status);
-            return;
-          }
-          
-          setMessages(prev => [...prev, {
-            id: data.id,
-            role: 'assistant',
-            type: data.type,
-            content: data.content,
-            codeLanguage: data.codeLanguage,
-            fileName: data.fileName
-          }]);
-          setIsLoading(false);
-        } catch (error) {
-          console.error('Error processing message:', error);
-          toast({
-            title: 'Error',
-            description: 'Failed to process message from server',
-            variant: 'destructive',
-          });
-          setIsLoading(false);
-        }
-      };
-
-      const errorHandler = (error: Event) => {
-        console.error('SSE error:', error);
-        toast({
-          title: 'Connection Error',
-          description: 'Lost connection to server. Attempting to reconnect...',
-          variant: 'destructive',
-        });
-      };
-
-      eventSource.onmessage = messageHandler;
-      eventSource.onerror = errorHandler;
-
-      return () => {
-        eventSource.onmessage = null;
-        eventSource.onerror = null;
-      };
-    }
-  }, [eventSource, toast]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: `${Date.now()}-${Math.random()}`,
+      role: 'user',
+      type: 'text',
+      content: input
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
 
     try {
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: 'user',
-        type: 'text',
-        content: input
-      };
-
-      // Add user message to the chat
-      setMessages(prev => [...prev, userMessage]);
-      setInput('');
-      setIsLoading(true);
-
-      try {
-        const result = await sendMessage(input, currentFile);
-        if (!result.success && result.needNewKey) {
-          // Show toast notification for API key issue
-          toast({
-            title: 'API Key Required',
-            description: 'The AI service needs a valid API key. Please ask an administrator to update the configuration.',
-            variant: 'destructive',
-            duration: 5000,
-          });
-          
-          // Add system message to chat
-          setMessages(prev => [...prev, {
-            id: Date.now().toString(),
-            role: 'assistant',
-            type: 'error',
-            content: 'The AI service requires a valid API key. Please contact an administrator to resolve this issue.'
-          }]);
-          return;
-        }
-      } catch (error: any) {
-        console.error('AI Service error:', error);
-        
-        const errorMessage = error.response?.data?.error || 
-                           'Failed to get response from AI. Please try again later.';
-        
-        // Add error message to chat
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'assistant',
-          type: 'error',
-          content: errorMessage
-        }]);
-        
-        // Show appropriate toast notification based on error type
-        const toastMessage = error.response?.status === 429 ? 
-          'Too many requests. Please wait a moment before trying again.' :
-          errorMessage;
-        
-        toast({
-          title: 'AI Service Error',
-          description: toastMessage,
-          variant: 'destructive',
-          duration: error.response?.status === 429 ? 3000 : 5000,
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    } catch (error) {
+      await sendMessage(input, currentFile);
+    } catch (error: any) {
       console.error('Message handling error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to process message. Please try again.',
-        variant: 'destructive',
-      });
+      setMessages(prev => [...prev, {
+        id: `${Date.now()}-${Math.random()}`,
+        role: 'assistant',
+        type: 'error',
+        content: 'Failed to get response. Please check your API key and try again.'
+      }]);
       setIsLoading(false);
     }
   };
@@ -266,38 +158,6 @@ export function AIPanel() {
     if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
       e.preventDefault();
       handleSend();
-    }
-  };
-
-  const applySuggestion = async (suggestion: Message) => {
-    if (!suggestion.fileName) return;
-
-    try {
-      const editor = (window as any).monaco?.editor
-        .getModels()
-        .find((model: any) => model.uri.path === suggestion.fileName);
-
-      if (editor) {
-        editor.pushEditOperations(
-          [],
-          [{
-            range: editor.getFullModelRange(),
-            text: suggestion.content
-          }],
-          () => null
-        );
-
-        toast({
-          title: 'Success',
-          description: 'Code changes applied successfully',
-        });
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to apply code changes',
-        variant: 'destructive',
-      });
     }
   };
 
@@ -350,16 +210,6 @@ export function AIPanel() {
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
-                      {message.type === 'suggestion' && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => applySuggestion(message)}
-                          className="h-6 w-6"
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                      )}
                     </div>
                   </div>
                 ) : (
