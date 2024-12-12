@@ -194,51 +194,87 @@ export function registerRoutes(app: Express): Server {
   // File operations
   app.post('/api/files/delete', async (req, res) => {
     try {
-      const { path: filePath } = req.body;
-      if (!filePath) {
-        return res.status(400).json({ error: 'Path parameter is required' });
+      const { paths } = req.body;
+      if (!paths || !Array.isArray(paths)) {
+        return res.status(400).json({ error: 'Paths array is required' });
       }
 
-      const absolutePath = path.join(process.cwd(), filePath);
-      await fs.unlink(absolutePath);
-      res.json({ success: true });
+      const results = await Promise.all(
+        paths.map(async (filePath) => {
+          try {
+            const absolutePath = path.join(process.cwd(), filePath);
+            await fs.unlink(absolutePath);
+            return { path: filePath, success: true };
+          } catch (err) {
+            return { path: filePath, success: false, error: 'Failed to delete file' };
+          }
+        })
+      );
+
+      const success = results.every(r => r.success);
+      if (success) {
+        res.json({ success: true, results });
+      } else {
+        res.status(500).json({ 
+          error: 'Some files failed to delete', 
+          results 
+        });
+      }
     } catch (error) {
-      console.error('Error deleting file:', error);
-      res.status(500).json({ error: 'Failed to delete file' });
+      console.error('Error deleting files:', error);
+      res.status(500).json({ error: 'Failed to delete files' });
     }
   });
 
   app.post('/api/files/duplicate', async (req, res) => {
     try {
-      const { path: sourcePath } = req.body;
-      if (!sourcePath) {
-        return res.status(400).json({ error: 'Path parameter is required' });
+      const { paths } = req.body;
+      if (!paths || !Array.isArray(paths)) {
+        return res.status(400).json({ error: 'Paths array is required' });
       }
 
-      const sourceAbsolutePath = path.join(process.cwd(), sourcePath);
-      const ext = path.extname(sourcePath);
-      const basename = path.basename(sourcePath, ext);
-      const dir = path.dirname(sourcePath);
-      let newPath = path.join(dir, `${basename}_copy${ext}`);
-      let counter = 1;
+      const results = await Promise.all(
+        paths.map(async (sourcePath) => {
+          try {
+            const sourceAbsolutePath = path.join(process.cwd(), sourcePath);
+            const ext = path.extname(sourcePath);
+            const basename = path.basename(sourcePath, ext);
+            const dir = path.dirname(sourcePath);
+            let newPath = path.join(dir, `${basename}_copy${ext}`);
+            let counter = 1;
 
-      // Handle case where copy already exists
-      let exists = true;
-      while (exists) {
-        try {
-          await fs.access(path.join(process.cwd(), newPath));
-          newPath = path.join(dir, `${basename}_copy_${counter}${ext}`);
-          counter++;
-        } catch {
-          exists = false;
-        }
+            // Handle case where copy already exists
+            let exists = true;
+            while (exists) {
+              try {
+                await fs.access(path.join(process.cwd(), newPath));
+                newPath = path.join(dir, `${basename}_copy_${counter}${ext}`);
+                counter++;
+              } catch {
+                exists = false;
+              }
+            }
+
+            await fs.copyFile(sourceAbsolutePath, path.join(process.cwd(), newPath));
+            return { path: sourcePath, success: true, newPath };
+          } catch (err) {
+            return { path: sourcePath, success: false, error: 'Failed to duplicate file' };
+          }
+        })
+      );
+
+      const success = results.every(r => r.success);
+      if (success) {
+        res.json({ success: true, results });
+      } else {
+        res.status(500).json({
+          error: 'Some files failed to duplicate',
+          results
+        });
       }
-
-      await fs.copyFile(sourceAbsolutePath, path.join(process.cwd(), newPath));
-      res.json({ success: true, newPath });
     } catch (error) {
-      console.error('Error duplicating file:', error);
-      res.status(500).json({ error: 'Failed to duplicate file' });
+      console.error('Error duplicating files:', error);
+      res.status(500).json({ error: 'Failed to duplicate files' });
     }
   });
 

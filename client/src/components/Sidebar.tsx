@@ -64,59 +64,86 @@ export function Sidebar() {
     });
   };
 
-  const handleDelete = async (filePath: string) => {
+  const handleDelete = async (filePath: string | string[]) => {
+    const paths = Array.isArray(filePath) ? filePath : [filePath];
+    
     try {
       const response = await fetch('/api/files/delete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ path: filePath }),
+        body: JSON.stringify({ paths }),
       });
+
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error('Failed to delete file');
+        throw new Error(data.error || 'Failed to delete files');
       }
 
-      toast({
-        title: 'Success',
-        description: 'File deleted successfully',
-      });
+      const failedFiles = data.results?.filter(r => !r.success) || [];
+      if (failedFiles.length > 0) {
+        toast({
+          title: 'Warning',
+          description: `Failed to delete ${failedFiles.length} files`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: `${paths.length} file(s) deleted successfully`,
+        });
+      }
       
       fetchFiles();
+      setSelectedFiles(new Set());
     } catch (error) {
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to delete file',
+        description: error instanceof Error ? error.message : 'Failed to delete files',
         variant: 'destructive',
       });
     }
   };
 
-  const handleDuplicate = async (filePath: string) => {
+  const handleDuplicate = async (filePath: string | string[]) => {
+    const paths = Array.isArray(filePath) ? filePath : [filePath];
+    
     try {
       const response = await fetch('/api/files/duplicate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ path: filePath }),
+        body: JSON.stringify({ paths }),
       });
+
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error('Failed to duplicate file');
+        throw new Error(data.error || 'Failed to duplicate files');
       }
 
-      toast({
-        title: 'Success',
-        description: 'File duplicated successfully',
-      });
+      const failedFiles = data.results?.filter(r => !r.success) || [];
+      if (failedFiles.length > 0) {
+        toast({
+          title: 'Warning',
+          description: `Failed to duplicate ${failedFiles.length} files`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: `${paths.length} file(s) duplicated successfully`,
+        });
+      }
       
       fetchFiles();
     } catch (error) {
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to duplicate file',
+        description: error instanceof Error ? error.message : 'Failed to duplicate files',
         variant: 'destructive',
       });
     }
@@ -306,20 +333,35 @@ export function Sidebar() {
             </Popover>
           </ContextMenuTrigger>
           <ContextMenuContent>
-            {node.name.endsWith('.zip') && (
-              <ContextMenuItem onClick={() => handleUnzip(fullPath)}>
-                Extract Here
-              </ContextMenuItem>
+            {selectedFiles.size > 1 ? (
+              // Multiple files selected
+              <>
+                <ContextMenuItem onClick={() => handleDuplicate(Array.from(selectedFiles))}>
+                  Duplicate Selected Files
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleDelete(Array.from(selectedFiles))}>
+                  Delete Selected Files
+                </ContextMenuItem>
+              </>
+            ) : (
+              // Single file selected
+              <>
+                {node.name.endsWith('.zip') && (
+                  <ContextMenuItem onClick={() => handleUnzip(fullPath)}>
+                    Extract Here
+                  </ContextMenuItem>
+                )}
+                <ContextMenuItem onClick={() => handleDuplicate(fullPath)}>
+                  Duplicate
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleDelete(fullPath)}>
+                  Delete
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleRename(fullPath, node.type)}>
+                  Rename
+                </ContextMenuItem>
+              </>
             )}
-            <ContextMenuItem onClick={() => handleDuplicate(fullPath)}>
-              Duplicate
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => handleDelete(fullPath)}>
-              Delete
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => handleRename(fullPath, node.type)}>
-              Rename
-            </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
         {node.type === 'folder' && isExpanded && node.children && (
