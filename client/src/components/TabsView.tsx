@@ -32,39 +32,46 @@ export function TabsView() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="border-b px-1 bg-background flex items-center">
-        <TabsList className="h-10 flex-1 justify-start gap-1 bg-transparent p-0">
-          {openFiles.map((file) => (
-            <TabsTrigger
-              key={file}
-              value={file}
-              className={cn(
-                "relative h-9 rounded-none border-b-2 border-b-transparent px-4 pb-3 pt-2 font-normal hover:bg-muted/30 data-[state=active]:border-b-primary data-[state=active]:bg-muted/40",
-                "group flex items-center gap-2 text-sm"
-              )}
-            >
-              <span className="truncate max-w-[120px]">
-                {file.split('/').pop()}
-              </span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeFile(file);
-                }}
-                className="opacity-0 group-hover:opacity-100 hover:text-destructive"
+        <Tabs
+          value={currentFile || undefined}
+          onValueChange={setCurrentFile}
+          className="flex-1"
+        >
+          <TabsList className="h-10 w-full justify-start gap-1 bg-transparent p-0">
+            {openFiles.map((file) => (
+              <TabsTrigger
+                key={file}
+                value={file}
+                className={cn(
+                  "relative h-9 rounded-none border-b-2 border-b-transparent px-4 pb-3 pt-2 font-normal hover:bg-muted/30 data-[state=active]:border-b-primary data-[state=active]:bg-muted/40",
+                  "group flex items-center gap-2 text-sm"
+                )}
               >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close tab</span>
-              </button>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+                <span className="truncate max-w-[120px]">
+                  {file.split('/').pop()}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeFile(file);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 hover:text-destructive"
+                >
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close tab</span>
+                </button>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <button
           onClick={toggleSplit}
           className={cn(
-            "px-2 py-1 rounded hover:bg-muted/30",
+            "px-2 py-1 rounded hover:bg-muted/30 ml-2",
             isSplit && "bg-muted/40"
           )}
           disabled={openFiles.length < 2}
+          title="Split Editor"
         >
           <Split className="h-4 w-4" />
         </button>
@@ -79,16 +86,19 @@ export function TabsView() {
                 onValueChange={setCurrentFile}
                 className="h-full"
               >
-                <TabsContent
-                  value={currentFile || ""}
-                  className="h-full data-[state=inactive]:hidden"
-                >
-                  <CodeEditor filePath={currentFile || ""} />
-                </TabsContent>
+                {openFiles.map((file) => (
+                  <TabsContent
+                    key={file}
+                    value={file}
+                    className="h-full data-[state=inactive]:hidden"
+                  >
+                    <CodeEditor filePath={file} />
+                  </TabsContent>
+                ))}
               </Tabs>
             </ResizablePanel>
             
-            <ResizableHandle />
+            <ResizableHandle withHandle />
             
             <ResizablePanel defaultSize={50}>
               <Tabs
@@ -96,12 +106,15 @@ export function TabsView() {
                 onValueChange={setSplitFile}
                 className="h-full"
               >
-                <TabsContent
-                  value={splitFile || ""}
-                  className="h-full data-[state=inactive]:hidden"
-                >
-                  <CodeEditor filePath={splitFile || ""} />
-                </TabsContent>
+                {openFiles.map((file) => (
+                  <TabsContent
+                    key={file}
+                    value={file}
+                    className="h-full data-[state=inactive]:hidden"
+                  >
+                    <CodeEditor filePath={file} />
+                  </TabsContent>
+                ))}
               </Tabs>
             </ResizablePanel>
           </ResizablePanelGroup>
