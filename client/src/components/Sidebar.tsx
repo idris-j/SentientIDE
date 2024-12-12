@@ -476,7 +476,17 @@ export function Sidebar() {
                   <Select
                     value={variant}
                     onValueChange={(value: string) => {
-                      setVariant(value as 'professional' | 'vibrant');
+                      try {
+                        console.log('Changing theme variant to:', value);
+                        setVariant(value as 'professional' | 'vibrant');
+                      } catch (error) {
+                        console.error('Error changing theme:', error);
+                        toast({
+                          title: "Error",
+                          description: "Failed to change theme",
+                          variant: "destructive",
+                        });
+                      }
                     }}
                   >
                     <SelectTrigger aria-label="Select theme style">

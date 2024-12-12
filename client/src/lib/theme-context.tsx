@@ -83,8 +83,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         // Update radius
         root.style.setProperty('--radius', `${selectedPreset.radius}rem`);
 
+        // Log theme update details
+        console.log('Updating theme:', {
+          variant,
+          theme: effectiveTheme,
+          selectedPreset
+        });
+
         // Update theme.json through API
-        await fetch('/api/theme', {
+        const response = await fetch('/api/theme', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -92,14 +99,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({
             variant,
             primary: selectedPreset.primary,
-            secondary: selectedPreset.secondary,
-            accent: selectedPreset.accent,
             appearance: theme,
             radius: selectedPreset.radius,
           }),
         });
+
+        if (!response.ok) {
+          throw new Error('Failed to update theme configuration');
+        }
+
+        // Log successful theme update
+        console.log('Theme updated successfully');
       } catch (error) {
         console.error('Failed to update theme:', error);
+        // Reset to default theme if update fails
+        if (variant !== 'professional') {
+          setVariant('professional');
+        }
       }
     };
 
