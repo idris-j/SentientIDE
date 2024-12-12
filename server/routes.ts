@@ -133,6 +133,22 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.get('/api/files/content', async (req, res) => {
+    try {
+      const filePath = req.query.path as string;
+      if (!filePath) {
+        return res.status(400).json({ error: 'Path parameter is required' });
+      }
+
+      const absolutePath = path.join(process.cwd(), filePath);
+      const content = await fs.readFile(absolutePath, 'utf-8');
+      res.send(content);
+    } catch (error) {
+      console.error('Error reading file:', error);
+      res.status(500).json({ error: 'Failed to read file' });
+    }
+  });
+
   app.get('/api/files', async (_req, res) => {
     try {
       const uploadPath = path.join(process.cwd(), 'uploads');

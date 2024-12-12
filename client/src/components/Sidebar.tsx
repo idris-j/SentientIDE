@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTheme } from '@/lib/theme-context';
+import { useFile } from '@/lib/file-context';
 import { Button } from '@/components/ui/button';
 import { FileText, Folder, Settings, Moon, Sun, Monitor } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -18,6 +19,7 @@ interface FileNode {
 export function Sidebar() {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
+  const { setCurrentFile } = useFile();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
   const [files, setFiles] = useState<FileNode[]>([]);
 
@@ -102,7 +104,13 @@ export function Sidebar() {
               size="sm"
               className="w-full justify-start gap-2 font-normal hover:bg-accent"
               style={{ paddingLeft: `${depth * 1.5}rem` }}
-              onClick={() => node.type === 'folder' && toggleFolder(currentPath)}
+              onClick={() => {
+                if (node.type === 'folder') {
+                  toggleFolder(currentPath);
+                } else {
+                  setCurrentFile(currentPath);
+                }
+              }}
             >
               {node.type === 'folder' && (
                 <div className="w-4 h-4 flex items-center justify-center">

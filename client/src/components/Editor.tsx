@@ -1,10 +1,31 @@
-import { useRef } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import Editor from "@monaco-editor/react";
 import { Card } from '@/components/ui/card';
 import type * as Monaco from 'monaco-editor';
+import { useFile } from '@/lib/file-context';
 
 export function CodeEditor() {
+  const { currentFile } = useFile();
+  const [content, setContent] = useState<string>('// Select a file to edit');
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
+
+  useEffect(() => {
+    const fetchContent = async () => {
+      if (currentFile) {
+        try {
+          const response = await fetch(`/api/files/content?path=${encodeURIComponent(currentFile)}`);
+          if (response.ok) {
+            const text = await response.text();
+            setContent(text);
+          }
+        } catch (error) {
+          console.error('Failed to fetch file content:', error);
+        }
+      }
+    };
+
+    fetchContent();
+  }, [currentFile]);
 
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor;
@@ -21,7 +42,7 @@ export function CodeEditor() {
     <Card className="h-full w-full rounded-none border-0 bg-[#1e1e1e]">
       <Editor
         defaultLanguage="typescript"
-        defaultValue="// Start coding here\n"
+        value={content}
         theme="vs-dark"
         options={{
           minimap: { enabled: true },
