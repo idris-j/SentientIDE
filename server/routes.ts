@@ -5,7 +5,7 @@ import { WebSocketServer } from 'ws';
 import fileUpload from 'express-fileupload';
 import AdmZip from 'adm-zip';
 import path from 'path';
-import { analyzeCode, handleQuery } from './services/claude';
+import { handleQuery } from './services/claude';
 import { handleTerminal } from './terminal';
 import fs from 'fs/promises';
 
@@ -63,6 +63,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('Terminal WebSocket connection established');
           handleTerminal(ws);
         });
+      } else if (pathname === '/ws/ide') {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit('connection', ws, request);
+        });
       } else {
         console.log(`Invalid WebSocket path: ${pathname}`);
         socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
@@ -75,16 +79,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Start the server
-  await new Promise<void>((resolve, reject) => {
-    httpServer.listen(port, '0.0.0.0', () => {
-      console.log(`Server started successfully on port ${port}`);
-      resolve();
-    }).once('error', (error) => {
-      console.error('Server failed to start:', error);
-      reject(error);
-    });
-  });
+  // Start the server with retries
+  let retryCount = 0;
+  const maxRetries = 3;
+  
+  while (retryCount < maxRetries) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const server = httpServer.listen(port, '0.0.0.0', () => {
+          console.log(`Server started successfully on port ${port}`);
+          resolve();
+        });
+
+        server.once('error', async (error: any) => {
+          if (error.code === 'EADDRINUSE') {
+            console.log(`Port ${port} is in use, trying next port...`);
+            port++;
+            retryCount++;
+            server.close();
+          } else {
+            console.error('Server failed to start:', error);
+            reject(error);
+          }
+        });
+      });
+      break; // Successfully started server
+    } catch (error) {
+      if (retryCount === maxRetries - 1) {
+        throw error; // Reached max retries
+      }
+      retryCount++;
+    }
+  }
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {

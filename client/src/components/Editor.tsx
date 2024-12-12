@@ -32,6 +32,28 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor;
     
+    // Store editor reference
+    editorRef.current = editor;
+
+    // Handle editor layout updates
+    const container = editor.getContainerDomNode().parentElement;
+    if (container) {
+      const resizeObserver = new ResizeObserver(() => {
+        // Use RAF to ensure all DOM updates are complete
+        requestAnimationFrame(() => {
+          const { width, height } = container.getBoundingClientRect();
+          editor.layout({ width, height });
+        });
+      });
+      
+      resizeObserver.observe(container);
+      
+      // Store cleanup function for unmounting
+      (editor as any)._cleanup = () => {
+        resizeObserver.disconnect();
+      };
+    }
+    
     // Add editor change listener
     editor.onDidChangeModelContent(() => {
       const value = editor.getValue();
@@ -58,27 +80,35 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
 
   return (
     <Card className="h-full w-full rounded-none border-0 bg-background">
-      <Editor
-        defaultLanguage="typescript"
-        value={content}
-        theme="vs-dark"
-        options={{
-          minimap: { enabled: true },
-          fontSize: 14,
-          lineNumbers: 'on',
-          roundedSelection: true,
-          scrollBeyondLastLine: false,
-          readOnly: false,
-          cursorStyle: 'line',
-          quickSuggestions: true,
-          folding: true,
-          lineDecorationsWidth: 10,
-          renderLineHighlight: 'all',
-          automaticLayout: true,
-        }}
-        onMount={handleEditorDidMount}
-        className="h-full w-full"
-      />
+      <div className="h-full w-full relative overflow-hidden">
+        <Editor
+          defaultLanguage="typescript"
+          value={content}
+          theme="vs-dark"
+          options={{
+            minimap: { enabled: false },
+            fontSize: 14,
+            lineNumbers: 'on',
+            roundedSelection: true,
+            scrollBeyondLastLine: false,
+            readOnly: false,
+            cursorStyle: 'line',
+            quickSuggestions: true,
+            folding: true,
+            lineDecorationsWidth: 10,
+            renderLineHighlight: 'all',
+            automaticLayout: false,
+            fixedOverflowWidgets: true,
+            scrollbar: {
+              verticalScrollbarSize: 10,
+              horizontalScrollbarSize: 10,
+              alwaysConsumeMouseWheel: false
+            }
+          }}
+          onMount={handleEditorDidMount}
+          className="absolute inset-0"
+        />
+      </div>
     </Card>
   );
 }

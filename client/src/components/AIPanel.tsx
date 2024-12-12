@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ export function AIPanel() {
   const [isConnected, setIsConnected] = useState(false);
   const { currentFile } = useFile();
 
-  const setupEventSource = useCallback(() => {
+  const setupEventSource = () => {
     if (eventSource) {
       eventSource.close();
     }
@@ -81,11 +81,7 @@ export function AIPanel() {
     };
 
     setEventSource(newEventSource);
-
-    return () => {
-      newEventSource.close();
-    };
-  }, [toast]);
+  };
 
   useEffect(() => {
     setupEventSource();
@@ -94,7 +90,7 @@ export function AIPanel() {
         eventSource.close();
       }
     };
-  }, [setupEventSource]);
+  }, []);
 
   const sendMessage = async (content: string, currentFile: string | null) => {
     try {

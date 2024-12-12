@@ -30,8 +30,8 @@ export function TabsView() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="border-b px-1 bg-background flex items-center">
+    <div className="flex-1 flex flex-col overflow-hidden select-none">
+      <div className="border-b px-1 bg-background flex items-center flex-shrink-0">
         <Tabs
           value={currentFile || undefined}
           onValueChange={setCurrentFile}
@@ -79,12 +79,29 @@ export function TabsView() {
 
       <div className="flex-1 relative">
         {isSplit ? (
-          <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={50}>
+          <ResizablePanelGroup 
+            direction="horizontal" 
+            className="h-full"
+            onLayout={(sizes) => {
+              // Trigger editor resize only after panel resize is complete
+              requestAnimationFrame(() => {
+                const editor = (window as any).monaco?.editor?.getActiveEditor?.();
+                if (editor) {
+                  editor.layout();
+                }
+              });
+            }}
+          >
+            <ResizablePanel 
+              defaultSize={50} 
+              minSize={30} 
+              maxSize={70}
+              style={{ overflow: 'hidden' }}
+            >
               <Tabs
                 value={currentFile || undefined}
                 onValueChange={setCurrentFile}
-                className="h-full"
+                className="h-full overflow-hidden"
               >
                 <div className="border-b px-1 bg-muted/10">
                   <TabsList className="h-8 w-full justify-start gap-1 bg-transparent p-0">
@@ -110,11 +127,11 @@ export function TabsView() {
             
             <ResizableHandle withHandle />
             
-            <ResizablePanel defaultSize={50}>
+            <ResizablePanel defaultSize={50} minSize={30} maxSize={70}>
               <Tabs
                 value={splitFile || undefined}
                 onValueChange={setSplitFile}
-                className="h-full"
+                className="h-full overflow-hidden"
               >
                 <div className="border-b px-1 bg-muted/10">
                   <TabsList className="h-8 w-full justify-start gap-1 bg-transparent p-0">
