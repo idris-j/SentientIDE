@@ -176,7 +176,7 @@ export function Sidebar() {
         description: 'File renamed successfully',
       });
       
-      setRenameDialogOpen(false);
+      setFileToRename(null);
       fetchFiles();
     } catch (error) {
       toast({
@@ -305,8 +305,17 @@ export function Sidebar() {
                 {node.name}
               </Button>
               {fileToRename?.path === fullPath && (
-                <div className="absolute left-0 top-full z-50 mt-2 w-72 rounded-md border bg-popover p-4 shadow-md">
-                  <div className="space-y-4">
+                <div 
+                  className="fixed z-50 w-64 rounded-md border bg-popover shadow-md"
+                  style={{
+                    top: 'calc(100% + 0.5rem)',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    maxHeight: 'calc(100vh - 100%)',
+                    overflow: 'auto'
+                  }}
+                >
+                  <div className="p-3">
                     <div className="space-y-2">
                       <h4 className="font-medium text-sm">Rename {fileToRename.name}</h4>
                       <Input
@@ -326,7 +335,7 @@ export function Sidebar() {
                         autoFocus
                       />
                     </div>
-                    <div className="flex justify-end gap-2">
+                    <div className="mt-3 flex justify-end gap-2">
                       <Button 
                         variant="outline" 
                         size="sm"
