@@ -437,7 +437,6 @@ export function Sidebar() {
                     Choose between light, dark, or system-based theme.
                   </p>
                   <Select
-                    id="theme-appearance"
                     defaultValue={theme}
                     onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
                   >
@@ -473,7 +472,6 @@ export function Sidebar() {
                     Select a theme style that matches your preferences.
                   </p>
                   <Select
-                    id="theme-style"
                     defaultValue={variant}
                     onValueChange={(value) => setVariant(value as 'professional' | 'vibrant' | 'minimal' | 'modern')}
                   >

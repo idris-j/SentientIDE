@@ -35,6 +35,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('theme', theme);
     localStorage.setItem('theme-variant', variant);
 
+    // Update CSS variables directly
+    const updateThemeVariables = (presets: any) => {
+      const vars = presets[variant];
+      if (!vars) return;
+
+      Object.entries(vars).forEach(([key, value]) => {
+        if (key === 'radius') {
+          root.style.setProperty('--radius', `${value}rem`);
+        } else {
+          root.style.setProperty(`--${key}`, value as string);
+        }
+      });
+    };
+
     // Update theme.json when theme or variant changes
     const updateTheme = async () => {
       try {
@@ -92,12 +106,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const handleChange = () => {
         root.classList.remove('light', 'dark');
         root.classList.add(mediaQuery.matches ? 'dark' : 'light');
+        updateTheme(); // Update theme variables when system theme changes
       };
       
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     }
-  }, [theme]);
+  }, [theme, variant]); // Add variant to dependencies
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, variant, setVariant }}>
