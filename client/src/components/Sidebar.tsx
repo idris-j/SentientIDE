@@ -273,83 +273,85 @@ export function Sidebar() {
       <div key={fullPath}>
         <ContextMenu>
           <ContextMenuTrigger>
-            <Button
-                variant="ghost"
-                size="sm"
-                style={{ paddingLeft: `${depth * 1.5}rem` }}
-                onClick={(e) => {
-                  if (node.type === 'folder') {
-                    toggleFolder(fullPath);
-                  }
-                  handleFileSelection(fullPath, node.type, e);
-                }}
-                className={cn(
-                  "w-full justify-start gap-2 font-normal",
-                  isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50 hover:text-accent-foreground",
-                  "focus-visible:bg-accent focus-visible:text-accent-foreground"
-                )}
-                onKeyDown={(e) => {
-                  if (e.key === ' ' || e.key === 'Enter') {
-                    e.preventDefault();
-                    handleFileSelection(fullPath, node.type, e as unknown as React.MouseEvent);
-                  }
-                }}
-              >
-                {node.type === 'folder' && (
-                  <div className="w-4 h-4 flex items-center justify-center">
-                    {isExpanded ? '▼' : '▶'}
-                  </div>
-                )}
-                {node.type === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
-                {node.name}
-              </Button>
-              {fileToRename?.path === fullPath && (
-                <Popover open={true} onOpenChange={(open) => !open && setFileToRename(null)}>
-                  <PopoverContent 
-                    className="w-72 p-4" 
-                    side="bottom" 
-                    align="start" 
-                    sideOffset={5}
+            <div>
+              <Popover open={fileToRename?.path === fullPath} onOpenChange={(open) => !open && setFileToRename(null)}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    style={{ paddingLeft: `${depth * 1.5}rem` }}
+                    onClick={(e) => {
+                      if (node.type === 'folder') {
+                        toggleFolder(fullPath);
+                      }
+                      handleFileSelection(fullPath, node.type, e);
+                    }}
+                    className={cn(
+                      "w-full justify-start gap-2 font-normal",
+                      isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50 hover:text-accent-foreground",
+                      "focus-visible:bg-accent focus-visible:text-accent-foreground"
+                    )}
+                    onKeyDown={(e) => {
+                      if (e.key === ' ' || e.key === 'Enter') {
+                        e.preventDefault();
+                        handleFileSelection(fullPath, node.type, e as unknown as React.MouseEvent);
+                      }
+                    }}
                   >
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-sm">Rename {fileToRename.name}</h4>
-                        <Input
-                          id="name"
-                          value={newFileName}
-                          onChange={(e) => setNewFileName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleRenameSubmit();
-                            } else if (e.key === 'Escape') {
-                              setFileToRename(null);
-                            }
-                          }}
-                          placeholder="Enter new name"
-                          className="h-8"
-                          autoFocus
-                        />
+                    {node.type === 'folder' && (
+                      <div className="w-4 h-4 flex items-center justify-center">
+                        {isExpanded ? '▼' : '▶'}
                       </div>
-                      <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setFileToRename(null)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          size="sm"
-                          onClick={handleRenameSubmit}
-                        >
-                          Rename
-                        </Button>
-                      </div>
+                    )}
+                    {node.type === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
+                    {node.name}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent 
+                  className="w-72 p-4" 
+                  side="bottom" 
+                  align="start" 
+                  sideOffset={5}
+                >
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-sm">Rename {fileToRename?.name}</h4>
+                      <Input
+                        id="name"
+                        value={newFileName}
+                        onChange={(e) => setNewFileName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleRenameSubmit();
+                          } else if (e.key === 'Escape') {
+                            setFileToRename(null);
+                          }
+                        }}
+                        placeholder="Enter new name"
+                        className="h-8"
+                        autoFocus
+                      />
                     </div>
-                  </PopoverContent>
-                </Popover>
-              )}
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setFileToRename(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={handleRenameSubmit}
+                      >
+                        Rename
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
             {selectedFiles.size > 1 ? (
