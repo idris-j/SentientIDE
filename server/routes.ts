@@ -142,21 +142,26 @@ export function registerRoutes(app: Express): Server {
   app.get('/api/sse', (req, res) => {
     try {
       const clientId = Date.now().toString();
-      // Set headers for SSE
+      
+      // Set SSE headers
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': '*'
+        'X-Accel-Buffering': 'no'
       });
 
-      res.writeHead(200, headers);
-
-      // Helper function to send SSE messages
+      // Helper function to send SSE messages with error handling
       const sendEvent = (data: any) => {
-        if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify(data)}\n\n`);
+        try {
+          if (!res.writableEnded) {
+            const message = `data: ${JSON.stringify(data)}\n\n`;
+            res.write(message);
+            res.flush?.(); // Flush data if method is available
+          }
+        } catch (error) {
+          console.error('Error sending SSE event:', error);
+          cleanup();
         }
       };
 
@@ -181,30 +186,38 @@ export function registerRoutes(app: Express): Server {
       aiEventEmitter.on('message', messageHandler);
       aiEventEmitter.on('error', errorHandler);
 
-      // Setup heartbeat interval
+      // Setup heartbeat interval with shorter interval
       const heartbeatInterval = setInterval(() => {
         try {
-          sendEvent({
-            type: 'heartbeat',
-            clientId,
-            timestamp: Date.now()
-          });
+          if (!res.writableEnded) {
+            sendEvent({
+              type: 'heartbeat',
+              clientId,
+              timestamp: Date.now()
+            });
+          } else {
+            cleanup();
+          }
         } catch (error) {
           console.error(`Heartbeat error for client ${clientId}:`, error);
           cleanup();
         }
-      }, 30000);
+      }, 15000); // Reduced to 15 seconds
 
       // Cleanup function
       const cleanup = () => {
-        clearInterval(heartbeatInterval);
-        aiEventEmitter.off('message', messageHandler);
-        aiEventEmitter.off('error', errorHandler);
-        clients.delete(res);
-        if (!res.writableEnded) {
-          res.end();
+        try {
+          clearInterval(heartbeatInterval);
+          aiEventEmitter.removeListener('message', messageHandler);
+          aiEventEmitter.removeListener('error', errorHandler);
+          clients.delete(res);
+          if (!res.writableEnded) {
+            res.end();
+          }
+          console.log(`Client ${clientId} disconnected from SSE`);
+        } catch (error) {
+          console.error('Error during cleanup:', error);
         }
-        console.log(`Client ${clientId} disconnected from SSE`);
       };
 
       // Add client to active connections
@@ -212,19 +225,33 @@ export function registerRoutes(app: Express): Server {
       console.log(`Client ${clientId} connected to SSE`);
 
       // Handle client disconnect
-      req.on('close', cleanup);
-      res.on('error', (error) => {
+      req.on('close', () => {
+        console.log(`Client ${clientId} connection closed`);
+        cleanup();
+      });
+
+      // Handle errors
+      req.on('error', (error) => {
         console.error(`SSE error for client ${clientId}:`, error);
         cleanup();
       });
 
       // Ensure connection isn't dropped by proxy
-      res.socket?.setKeepAlive(true);
+      if (res.socket) {
+        res.socket.setKeepAlive(true);
+        res.socket.setTimeout(0);
+      }
 
     } catch (error) {
       console.error('Error setting up SSE connection:', error);
       if (!res.headersSent) {
-        res.status(500).end();
+        res.status(500).json({ error: 'Failed to establish SSE connection' });
+      } else {
+        try {
+          res.end();
+        } catch (e) {
+          console.error('Error ending response:', e);
+        }
       }
     }
   });

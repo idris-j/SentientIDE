@@ -1,11 +1,10 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFile } from '@/lib/file-context';
-import { Send, Copy, Check } from 'lucide-react';
+import { Send, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -27,97 +26,139 @@ export function AIPanel() {
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const { currentFile } = useFile();
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const maxReconnectAttempts = 3;
+  const reconnectAttemptsRef = useRef(0);
 
   const setupEventSource = () => {
-    if (eventSource) {
-      eventSource.close();
-    }
-
-    const newEventSource = new EventSource('/api/sse');
-    
-    newEventSource.onopen = () => {
-      console.log('SSE connection established');
-      setIsConnected(true);
-    };
-
-    newEventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'connection') {
-          console.log('SSE connection status:', data.status);
-          return;
+    try {
+      // Clean up existing connection
+      if (eventSource) {
+        try {
+          eventSource.close();
+        } catch (err) {
+          console.error('Error closing existing EventSource:', err);
         }
-
-        if (data.type === 'error') {
-          if (data.content.includes('API key')) {
-            toast({
-              title: 'API Key Required',
-              description: 'Please set up your NVIDIA API key to use the IBM Granite code model.',
-              variant: 'destructive',
-            });
-          } else if (data.content.includes('rate limit')) {
-            toast({
-              title: 'Rate Limit',
-              description: 'Please wait a moment before sending another message.',
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: 'Error',
-              description: data.content,
-              variant: 'destructive',
-            });
-          }
-          setIsLoading(false);
-          return;
-        }
-        
-        setMessages(prev => [...prev, {
-          id: `${Date.now()}-${Math.random()}`,
-          role: 'assistant',
-          type: data.type,
-          content: data.content,
-          codeLanguage: data.codeLanguage,
-          fileName: data.fileName
-        }]);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error processing message:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to process message from server',
-          variant: 'destructive',
-        });
-        setIsLoading(false);
+        setEventSource(null);
       }
-    };
 
-    newEventSource.onerror = () => {
-      console.error('SSE connection error');
-      setIsConnected(false);
-      newEventSource.close();
+      // Initialize new connection
+      const newEventSource = new EventSource('/api/sse', { withCredentials: false });
       
-      // Attempt to reconnect after 2 seconds
-      setTimeout(() => {
-        console.log('Attempting to reconnect...');
-        setupEventSource();
-      }, 2000);
-      
+      // Connection opened successfully
+      newEventSource.onopen = () => {
+        console.log('SSE connection established');
+        setIsConnected(true);
+        reconnectAttemptsRef.current = 0; // Reset reconnection attempts
+        setIsLoading(false); // Ensure loading state is reset
+      };
+
+      newEventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'connection') {
+            console.log('SSE connection status:', data.status);
+            return;
+          }
+
+          if (data.type === 'heartbeat') {
+            console.log('Heartbeat received:', new Date(data.timestamp).toISOString());
+            return;
+          }
+
+          if (data.type === 'error') {
+            if (data.content.includes('API key')) {
+              toast({
+                title: 'API Key Required',
+                description: 'Please set up your NVIDIA API key to use the IBM Granite code model.',
+                variant: 'destructive',
+              });
+            } else if (data.content.includes('rate limit')) {
+              toast({
+                title: 'Rate Limit',
+                description: 'Please wait a moment before sending another message.',
+                variant: 'destructive',
+              });
+            } else {
+              toast({
+                title: 'Error',
+                description: data.content,
+                variant: 'destructive',
+              });
+            }
+            setIsLoading(false);
+            return;
+          }
+          
+          setMessages(prev => [...prev, {
+            id: `${Date.now()}-${Math.random()}`,
+            role: 'assistant',
+            type: data.type,
+            content: data.content,
+            codeLanguage: data.codeLanguage,
+            fileName: data.fileName
+          }]);
+          setIsLoading(false);
+        } catch (error) {
+          console.error('Error processing message:', error);
+          setIsLoading(false);
+        }
+      };
+
+      newEventSource.onerror = (error) => {
+        console.error('SSE connection error:', error);
+        setIsConnected(false);
+        newEventSource.close();
+        
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 5000);
+          reconnectAttemptsRef.current++;
+          
+          console.log(`Attempting to reconnect (${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`);
+          
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+          }
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            setupEventSource();
+          }, delay);
+          
+          toast({
+            title: 'Connection Error',
+            description: `Lost connection to server. Attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts}...`,
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Connection Failed',
+            description: 'Unable to establish connection after multiple attempts. Please refresh the page.',
+            variant: 'destructive',
+          });
+        }
+      };
+
+      setEventSource(newEventSource);
+    } catch (error) {
+      console.error('Error setting up EventSource:', error);
       toast({
         title: 'Connection Error',
-        description: 'Lost connection to server. Attempting to reconnect...',
+        description: 'Failed to establish server connection. Please refresh the page.',
         variant: 'destructive',
       });
-    };
-
-    setEventSource(newEventSource);
+    }
   };
 
   useEffect(() => {
     setupEventSource();
+    
     return () => {
       if (eventSource) {
         eventSource.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
       }
     };
   }, []);
@@ -137,7 +178,7 @@ export function AIPanel() {
         if (data.needNewKey) {
           toast({
             title: 'API Key Required',
-            description: 'Please set up your Claude API key in the environment variables.',
+            description: 'Please check your NVIDIA API key configuration.',
             variant: 'destructive',
           });
           return { success: false, needNewKey: true };

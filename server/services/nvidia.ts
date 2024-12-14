@@ -1,47 +1,45 @@
-import { env } from "node:process";
-import { Message } from "../types";
+import { EventEmitter } from "events";
 import { OpenAI } from "openai";
-import EventEmitter from "events";
+import type { Message } from "../types";
 
-const NVIDIA_API_KEY = env.NVIDIA_API_KEY_AIDEVSPHERE;
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY_AIDEVSPHERE;
 const MODEL_NAME = "ibm/granite-34b-code-instruct";
-
-if (!NVIDIA_API_KEY) {
-  console.error("NVIDIA_API_KEY_AIDEVSPHERE is not set in environment variables");
-  throw new Error("NEED_NEW_API_KEY");
-}
-
-console.log("NVIDIA API configuration initialized");
 
 // Create an event emitter for streaming responses
 export const aiEventEmitter = new EventEmitter();
 
-const client = new OpenAI({
-  baseURL: "https://integrate.api.nvidia.com/v1",
-  apiKey: NVIDIA_API_KEY,
-});
+let client: OpenAI | null = null;
+
+function initializeClient() {
+  if (!NVIDIA_API_KEY) {
+    console.error("NVIDIA_API_KEY_AIDEVSPHERE is not set in environment variables");
+    throw new Error("NEED_NEW_API_KEY");
+  }
+
+  if (!client) {
+    client = new OpenAI({
+      baseURL: "https://integrate.api.nvidia.com/v1",
+      apiKey: NVIDIA_API_KEY,
+    });
+    console.log("NVIDIA API client initialized successfully");
+  }
+
+  return client;
+}
 
 export async function handleQuery(
   query: string,
   currentFile: string | null,
 ): Promise<Message> {
-  if (!NVIDIA_API_KEY) {
-    console.error("NVIDIA API key is not set");
-    throw new Error("NEED_NEW_API_KEY");
-  }
-
   try {
+    const apiClient = initializeClient();
     console.log("Creating completion with NVIDIA API...");
+    
     const promptText = `${query}${currentFile ? `\n\nContext: Currently editing ${currentFile}` : ""}`;
 
-    const completion = await client.chat.completions.create({
+    const completion = await apiClient.chat.completions.create({
       model: MODEL_NAME,
-      messages: [
-        {
-          role: "user",
-          content: promptText,
-        },
-      ],
+      messages: [{ role: "user", content: promptText }],
       temperature: 0.5,
       top_p: 1,
       max_tokens: 1024,
@@ -57,43 +55,36 @@ export async function handleQuery(
           const content = chunk.choices[0].delta.content;
           fullResponse += content;
 
-          // Emit the chunk through the event emitter
           const message: Message = {
             id: Date.now().toString(),
             type: "text",
             content: content,
           };
 
-          console.log('Emitting message chunk:', content);
           aiEventEmitter.emit("message", message);
-          
-          // Ensure the event is properly sent before continuing
-          await new Promise(resolve => setTimeout(resolve, 10));
         }
       }
 
-      // Emit final complete message
-      aiEventEmitter.emit("message", {
+      const finalMessage: Message = {
         id: Date.now().toString(),
         type: "text",
         content: fullResponse,
-      });
+      };
+      
+      aiEventEmitter.emit("message", finalMessage);
+      return finalMessage;
+
     } catch (streamError) {
       console.error('Streaming error:', streamError);
-      aiEventEmitter.emit("error", {
+      const errorMessage: Message = {
         id: Date.now().toString(),
         type: "error",
         content: "Stream interrupted. Please try again.",
-      });
-      throw streamError;
+      };
+      aiEventEmitter.emit("error", errorMessage);
+      return errorMessage;
     }
 
-    console.log("Stream completed successfully");
-    return {
-      id: Date.now().toString(),
-      type: "text",
-      content: fullResponse || "No response received from AI",
-    };
   } catch (error: any) {
     console.error("Error querying NVIDIA API:", error);
 
@@ -112,13 +103,10 @@ export async function handleQuery(
       return message;
     }
 
-    // Log the full error for debugging
-    console.error("Detailed error:", JSON.stringify(error, null, 2));
-
     const errorMessage: Message = {
       id: Date.now().toString(),
       type: "error",
-      content: "Failed to get response from AI. Please try again later.",
+      content: error.message || "Failed to get response from AI. Please try again later.",
     };
     aiEventEmitter.emit("error", errorMessage);
     return errorMessage;
