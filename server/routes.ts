@@ -5,7 +5,7 @@ import { WebSocketServer } from 'ws';
 import fileUpload from 'express-fileupload';
 import AdmZip from 'adm-zip';
 import path from 'path';
-import { handleQuery } from './services/claude';
+import { handleQuery, aiEventEmitter } from './services/nvidia';
 import type { Message } from './types';
 import { handleTerminal } from './terminal';
 import fs from 'fs/promises';
@@ -165,6 +165,19 @@ export function registerRoutes(app: Express): Server {
         timestamp: Date.now()
       });
 
+      // Setup message handlers
+      const messageHandler = (message: Message) => {
+        sendEvent(message);
+      };
+
+      const errorHandler = (error: Message) => {
+        sendEvent(error);
+      };
+
+      // Subscribe to AI events
+      aiEventEmitter.on('message', messageHandler);
+      aiEventEmitter.on('error', errorHandler);
+
       // Setup heartbeat interval
       const heartbeatInterval = setInterval(() => {
         try {
@@ -182,6 +195,8 @@ export function registerRoutes(app: Express): Server {
       // Cleanup function
       const cleanup = () => {
         clearInterval(heartbeatInterval);
+        aiEventEmitter.off('message', messageHandler);
+        aiEventEmitter.off('error', errorHandler);
         clients.delete(res);
         if (!res.writableEnded) {
           res.end();

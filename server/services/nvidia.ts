@@ -1,69 +1,108 @@
-import { env } from 'node:process';
-import { Message } from '../types';
+import { env } from "node:process";
+import { Message } from "../types";
+import { OpenAI } from "openai";
+import EventEmitter from "events";
 
 const NVIDIA_API_KEY = env.NVIDIA_API_KEY;
-const MODEL_NAME = 'playground_llama2_70b';
+const MODEL_NAME = "ibm/granite-34b-code-instruct";
 
-export async function handleQuery(query: string, currentFile: string | null): Promise<Message> {
+// Create an event emitter for streaming responses
+export const aiEventEmitter = new EventEmitter();
+
+const client = new OpenAI({
+  baseURL: "https://integrate.api.nvidia.com/v1",
+  apiKey: NVIDIA_API_KEY || "",
+});
+
+export async function handleQuery(
+  query: string,
+  currentFile: string | null,
+): Promise<Message> {
   if (!NVIDIA_API_KEY) {
-    throw new Error('NEED_NEW_API_KEY');
+    console.error("NVIDIA API key is not set");
+    throw new Error("NEED_NEW_API_KEY");
   }
 
   try {
-    const endpoint = process.env.NVIDIA_ENDPOINT || 'https://api.nvidia.com/v1/models';
-    const headers = {
-      'Authorization': `Bearer ${NVIDIA_API_KEY}`,
-      'Content-Type': 'application/json'
-    };
+    console.log("Creating completion with NVIDIA API...");
+    const promptText = `${query}${currentFile ? `\n\nContext: Currently editing ${currentFile}` : ""}`;
 
-    const promptText = `${query}${currentFile ? `\n\nContext: Currently editing ${currentFile}` : ''}`;
-    
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: MODEL_NAME,
-        messages: [{
-          role: 'user',
-          content: promptText
-        }],
-        max_tokens: 1024,
-        temperature: 0.7
-      })
+    const completion = await client.chat.completions.create({
+      model: MODEL_NAME,
+      messages: [
+        {
+          role: "user",
+          content: promptText,
+        },
+      ],
+      temperature: 0.5,
+      top_p: 1,
+      max_tokens: 1024,
+      stream: true,
     });
 
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error('NEED_NEW_API_KEY');
+    let fullResponse = "";
+    console.log("Starting to stream response...");
+
+    try {
+      for await (const chunk of completion) {
+        if (chunk.choices[0]?.delta?.content) {
+          const content = chunk.choices[0].delta.content;
+          fullResponse += content;
+
+          // Emit the chunk through the event emitter
+          const message: Message = {
+            id: Date.now().toString(),
+            type: "text",
+            content: content,
+          };
+
+          aiEventEmitter.emit("message", message);
+        }
       }
-      if (response.status === 429) {
-        return {
-          id: Date.now().toString(),
-          type: 'error',
-          content: 'Rate limit reached. Please wait a moment before trying again.'
-        };
-      }
-      throw new Error(`NVIDIA API error: ${response.statusText}`);
+    } catch (streamError) {
+      console.error("Error during streaming:", streamError);
+      aiEventEmitter.emit("error", {
+        id: Date.now().toString(),
+        type: "error",
+        content: "Stream interrupted. Please try again.",
+      });
+      throw streamError;
     }
 
-    const data = await response.json();
-    
+    console.log("Stream completed successfully");
     return {
       id: Date.now().toString(),
-      type: 'text',
-      content: data.choices[0].message.content || 'No response received from AI'
+      type: "text",
+      content: fullResponse || "No response received from AI",
     };
   } catch (error: any) {
-    console.error('Error querying NVIDIA API:', error);
-    
-    if (error.message === 'NEED_NEW_API_KEY') {
-      throw error;
+    console.error("Error querying NVIDIA API:", error);
+
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      console.error("Authentication error with NVIDIA API");
+      throw new Error("NEED_NEW_API_KEY");
     }
 
-    return {
+    if (error.response?.status === 429) {
+      const message: Message = {
+        id: Date.now().toString(),
+        type: "error",
+        content: "Rate limit exceeded. Please wait a moment before trying again.",
+      };
+      aiEventEmitter.emit("error", message);
+      return message;
+    }
+
+    // Log the full error for debugging
+    console.error("Detailed error:", JSON.stringify(error, null, 2));
+
+    const errorMessage: Message = {
       id: Date.now().toString(),
-      type: 'error',
-      content: 'Failed to get response from AI. Please try again later.'
+      type: "error",
+      content: "Failed to get response from AI. Please try again later.",
     };
+    aiEventEmitter.emit("error", errorMessage);
+    return errorMessage;
   }
 }

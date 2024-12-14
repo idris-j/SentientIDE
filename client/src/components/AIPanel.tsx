@@ -47,6 +47,24 @@ export function AIPanel() {
           console.log('SSE connection status:', data.status);
           return;
         }
+
+        if (data.type === 'error') {
+          if (data.content.includes('API key')) {
+            toast({
+              title: 'API Key Required',
+              description: 'Please set up your NVIDIA API key to use the IBM Granite code model.',
+              variant: 'destructive',
+            });
+          } else {
+            toast({
+              title: 'Error',
+              description: data.content,
+              variant: 'destructive',
+            });
+          }
+          setIsLoading(false);
+          return;
+        }
         
         setMessages(prev => [...prev, {
           id: `${Date.now()}-${Math.random()}`,
@@ -73,9 +91,15 @@ export function AIPanel() {
       setIsConnected(false);
       newEventSource.close();
       
+      // Attempt to reconnect after 2 seconds
+      setTimeout(() => {
+        console.log('Attempting to reconnect...');
+        setupEventSource();
+      }, 2000);
+      
       toast({
         title: 'Connection Error',
-        description: 'Lost connection to server. Please refresh the page.',
+        description: 'Lost connection to server. Attempting to reconnect...',
         variant: 'destructive',
       });
     };
@@ -140,13 +164,20 @@ export function AIPanel() {
       await sendMessage(input, currentFile);
     } catch (error: any) {
       console.error('Message handling error:', error);
+      const errorMessage = error?.response?.data?.error || error?.message || 'Failed to get response';
       setMessages(prev => [...prev, {
         id: `${Date.now()}-${Math.random()}`,
         role: 'assistant',
         type: 'error',
-        content: 'Failed to get response. Please check your API key and try again.'
+        content: `Error: ${errorMessage}. Please try again.`
       }]);
       setIsLoading(false);
+      
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     }
   };
 
