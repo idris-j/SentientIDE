@@ -55,6 +55,12 @@ export function AIPanel() {
               description: 'Please set up your NVIDIA API key to use the IBM Granite code model.',
               variant: 'destructive',
             });
+          } else if (data.content.includes('rate limit')) {
+            toast({
+              title: 'Rate Limit',
+              description: 'Please wait a moment before sending another message.',
+              variant: 'destructive',
+            });
           } else {
             toast({
               title: 'Error',

@@ -130,23 +130,26 @@ export function registerRoutes(app: Express): Server {
     res.status(500).json({ error: 'Internal server error' });
   });
 
+  // Enable CORS for all routes
+  app.use((_req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    next();
+  });
+
   // SSE endpoint for IDE communication
   app.get('/api/sse', (req, res) => {
     try {
       const clientId = Date.now().toString();
-      const headers: Record<string, string> = {
+      // Set headers for SSE
+      res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'
-      };
-
-      // Add CORS headers if needed
-      const origin = req.headers.origin;
-      if (origin) {
-        headers['Access-Control-Allow-Origin'] = origin;
-        headers['Access-Control-Allow-Credentials'] = 'true';
-      }
+        'X-Accel-Buffering': 'no',
+        'Access-Control-Allow-Origin': '*'
+      });
 
       res.writeHead(200, headers);
 

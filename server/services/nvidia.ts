@@ -3,15 +3,22 @@ import { Message } from "../types";
 import { OpenAI } from "openai";
 import EventEmitter from "events";
 
-const NVIDIA_API_KEY = env.NVIDIA_API_KEY;
+const NVIDIA_API_KEY = env.NVIDIA_API_KEY_AIDEVSPHERE;
 const MODEL_NAME = "ibm/granite-34b-code-instruct";
+
+if (!NVIDIA_API_KEY) {
+  console.error("NVIDIA_API_KEY_AIDEVSPHERE is not set in environment variables");
+  throw new Error("NEED_NEW_API_KEY");
+}
+
+console.log("NVIDIA API configuration initialized");
 
 // Create an event emitter for streaming responses
 export const aiEventEmitter = new EventEmitter();
 
 const client = new OpenAI({
   baseURL: "https://integrate.api.nvidia.com/v1",
-  apiKey: NVIDIA_API_KEY || "",
+  apiKey: NVIDIA_API_KEY,
 });
 
 export async function handleQuery(
@@ -57,11 +64,22 @@ export async function handleQuery(
             content: content,
           };
 
+          console.log('Emitting message chunk:', content);
           aiEventEmitter.emit("message", message);
+          
+          // Ensure the event is properly sent before continuing
+          await new Promise(resolve => setTimeout(resolve, 10));
         }
       }
+
+      // Emit final complete message
+      aiEventEmitter.emit("message", {
+        id: Date.now().toString(),
+        type: "text",
+        content: fullResponse,
+      });
     } catch (streamError) {
-      console.error("Error during streaming:", streamError);
+      console.error('Streaming error:', streamError);
       aiEventEmitter.emit("error", {
         id: Date.now().toString(),
         type: "error",

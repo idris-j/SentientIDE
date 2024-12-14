@@ -50,32 +50,23 @@ async function startServer() {
     const server = registerRoutes(app);
     await setupVite(app, server);
 
-    // Try ports from 5000 to 5010
-    for (let port = 5000; port <= 5010; port++) {
-      try {
-        await new Promise<void>((resolve, reject) => {
-          server.listen(port, '0.0.0.0')
-            .once('listening', () => {
-              log(`Server started successfully on port ${port}`);
-              resolve();
-            })
-            .once('error', (err: any) => {
-              if (err.code === 'EADDRINUSE') {
-                log(`Port ${port} in use, trying next port...`);
-                server.close();
-              } else {
-                reject(err);
-              }
-            });
-        });
-        // If we get here, the server started successfully
-        break;
-      } catch (err) {
-        if (port === 5010) {
-          throw new Error('No available ports found between 5000 and 5010');
-        }
-        continue;
-      }
+    // Use fixed port 5100 for consistency
+    const PORT = 5100;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.listen(PORT, '0.0.0.0')
+          .once('listening', () => {
+            log(`Server started successfully on port ${PORT}`);
+            resolve();
+          })
+          .once('error', (err: any) => {
+            console.error('Server failed to start:', err);
+            reject(err);
+          });
+      });
+    } catch (err) {
+      console.error('Failed to start server:', err);
+      throw err;
     }
   } catch (error) {
     console.error('Failed to initialize server:', error);
