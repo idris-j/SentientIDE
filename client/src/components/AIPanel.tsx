@@ -4,7 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFile } from '@/lib/file-context';
-import { Send, Copy, Check } from 'lucide-react';
+import { Send, Copy, Check, Menu as MenuIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -32,14 +32,29 @@ export function AIPanel() {
       eventSource.close();
     }
 
-    const newEventSource = new EventSource('/api/sse');
-    let retryCount = 0;
-    const maxRetries = 3;
+    const newEventSource = new EventSource('/api/sse', { 
+      withCredentials: true 
+    });
     
+    let retryCount = 0;
+    const maxRetries = 5;
+    const baseDelay = 1000;
+    let retryTimeout: NodeJS.Timeout | null = null;
+    
+    const cleanup = () => {
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+        retryTimeout = null;
+      }
+      if (newEventSource) {
+        newEventSource.close();
+      }
+    };
+
     newEventSource.onopen = () => {
       console.log('SSE connection established');
       setIsConnected(true);
-      retryCount = 0; // Reset retry count on successful connection
+      retryCount = 0;
     };
 
     newEventSource.onmessage = (event) => {
@@ -61,36 +76,36 @@ export function AIPanel() {
         setIsLoading(false);
       } catch (error) {
         console.error('Error processing message:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to process message from server',
-          variant: 'destructive',
-        });
         setIsLoading(false);
       }
     };
 
-    newEventSource.onerror = () => {
-      console.error('SSE connection error');
+    newEventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
       setIsConnected(false);
-      newEventSource.close();
+      cleanup();
       
       if (retryCount < maxRetries) {
         retryCount++;
-        console.log(`Retrying connection (${retryCount}/${maxRetries})...`);
-        setTimeout(() => {
+        const delay = Math.min(baseDelay * Math.pow(2, retryCount - 1), 10000);
+        console.log(`Retrying connection (${retryCount}/${maxRetries}) in ${delay}ms...`);
+        
+        retryTimeout = setTimeout(() => {
           setupEventSource();
-        }, 1000 * retryCount); // Exponential backoff
+        }, delay);
       } else {
         toast({
           title: 'Connection Error',
-          description: 'Lost connection to server. Please refresh the page.',
+          description: 'Unable to establish connection. Please refresh the page.',
           variant: 'destructive',
         });
       }
     };
 
     setEventSource(newEventSource);
+
+    // Cleanup on unmount
+    return cleanup;
   };
 
   useEffect(() => {
@@ -185,11 +200,11 @@ export function AIPanel() {
 
   return (
     <Card className="h-full rounded-none border-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="text-lg font-semibold">AI Assistant</h2>
+      <div className="sticky top-0 z-10 flex items-center justify-between p-2 sm:p-4 border-b bg-inherit">
+        <h2 className="text-base sm:text-lg font-semibold">AI Assistant</h2>
         <Button
           variant="ghost"
-          className="md:hidden"
+          className="lg:hidden hover:bg-accent/50"
           onClick={() => document.documentElement.classList.toggle('hide-ai-panel')}
           size="sm"
         >
@@ -199,13 +214,13 @@ export function AIPanel() {
       </div>
       
       <div className="flex flex-col h-[calc(100%-8rem)] overflow-hidden">
-        <ScrollArea className="flex-1 p-2 md:p-4" ref={scrollRef}>
+        <ScrollArea className="flex-1 px-2 py-4 md:px-4" ref={scrollRef}>
           <div className="space-y-4">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={cn(
-                  "flex w-full md:w-max max-w-[95%] md:max-w-[80%] flex-col gap-2 rounded-lg px-2 md:px-3 py-2 text-sm",
+                  "flex w-full sm:w-max max-w-[95%] sm:max-w-[80%] flex-col gap-2 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm break-words",
                   message.role === 'user'
                     ? "ml-auto bg-primary text-primary-foreground"
                     : "bg-muted"
