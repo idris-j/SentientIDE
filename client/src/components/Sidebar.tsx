@@ -4,7 +4,7 @@ import { useTheme } from '@/lib/theme-context';
 import { useFile } from '@/lib/file-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FileText, Folder, Settings, Moon, Sun, Monitor, ChevronLeft, Menu } from 'lucide-react';
+import { FileText, Folder, Settings, Moon, Sun, Monitor } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,7 +21,6 @@ interface FileNode {
 
 export function Sidebar() {
   const { toast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
   const { theme, setTheme, variant, setVariant } = useTheme();
   const { setCurrentFile, addFile } = useFile();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
@@ -402,31 +401,9 @@ export function Sidebar() {
   };
 
   return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="fixed top-4 left-4 z-50 lg:hidden"
-        onClick={() => setIsOpen(true)}
-      >
-        <Menu size={16} />
-      </Button>
-      
-      <div className={cn(
-        "h-full flex flex-col bg-sidebar border-r transition-all duration-300",
-        "fixed inset-y-0 left-0 z-50 w-72 lg:relative",
-        isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-      )}>
-      <div className="flex items-center justify-between p-4 border-b">
+    <div className="h-full flex flex-col bg-sidebar border-r">
+      <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">Files</h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="lg:hidden"
-          onClick={() => setIsOpen(false)}
-        >
-          <ChevronLeft size={16} />
-        </Button>
       </div>
       
       <ScrollArea className="flex-1">
@@ -515,14 +492,5 @@ export function Sidebar() {
         </Dialog>
       </div>
     </div>
-      
-      {/* Mobile overlay */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
-    </>
   );
 }
