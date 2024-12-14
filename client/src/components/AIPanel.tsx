@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -34,10 +33,13 @@ export function AIPanel() {
     }
 
     const newEventSource = new EventSource('/api/sse');
+    let retryCount = 0;
+    const maxRetries = 3;
     
     newEventSource.onopen = () => {
       console.log('SSE connection established');
       setIsConnected(true);
+      retryCount = 0; // Reset retry count on successful connection
     };
 
     newEventSource.onmessage = (event) => {
@@ -73,11 +75,19 @@ export function AIPanel() {
       setIsConnected(false);
       newEventSource.close();
       
-      toast({
-        title: 'Connection Error',
-        description: 'Lost connection to server. Please refresh the page.',
-        variant: 'destructive',
-      });
+      if (retryCount < maxRetries) {
+        retryCount++;
+        console.log(`Retrying connection (${retryCount}/${maxRetries})...`);
+        setTimeout(() => {
+          setupEventSource();
+        }, 1000 * retryCount); // Exponential backoff
+      } else {
+        toast({
+          title: 'Connection Error',
+          description: 'Lost connection to server. Please refresh the page.',
+          variant: 'destructive',
+        });
+      }
     };
 
     setEventSource(newEventSource);
@@ -175,18 +185,27 @@ export function AIPanel() {
 
   return (
     <Card className="h-full rounded-none border-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="p-4 border-b">
+      <div className="flex items-center justify-between p-4 border-b">
         <h2 className="text-lg font-semibold">AI Assistant</h2>
+        <Button
+          variant="ghost"
+          className="md:hidden"
+          onClick={() => document.documentElement.classList.toggle('hide-ai-panel')}
+          size="sm"
+        >
+          <span className="sr-only">Toggle AI Panel</span>
+          <MenuIcon className="h-4 w-4" />
+        </Button>
       </div>
       
-      <div className="flex flex-col h-[calc(100%-8rem)]">
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <div className="flex flex-col h-[calc(100%-8rem)] overflow-hidden">
+        <ScrollArea className="flex-1 p-2 md:p-4" ref={scrollRef}>
           <div className="space-y-4">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={cn(
-                  "flex w-max max-w-[80%] flex-col gap-2 rounded-lg px-3 py-2 text-sm",
+                  "flex w-full md:w-max max-w-[95%] md:max-w-[80%] flex-col gap-2 rounded-lg px-2 md:px-3 py-2 text-sm",
                   message.role === 'user'
                     ? "ml-auto bg-primary text-primary-foreground"
                     : "bg-muted"
@@ -223,7 +242,7 @@ export function AIPanel() {
           </div>
         </ScrollArea>
 
-        <div className="p-4 border-t">
+        <div className="p-2 md:p-4 border-t">
           <div className="flex gap-2">
             <Input
               placeholder="Ask me anything about your code..."
@@ -231,14 +250,15 @@ export function AIPanel() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isLoading}
-              className="flex-1"
+              className="flex-1 text-sm md:text-base"
             />
             <Button
               onClick={handleSend}
               disabled={isLoading || !input.trim()}
               size="icon"
+              className="h-10 w-10 md:h-12 md:w-12"
             >
-              <Send className="h-4 w-4" />
+              <Send className="h-4 w-4 md:h-5 md:w-5" />
             </Button>
           </div>
         </div>
