@@ -44,25 +44,39 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   res.status(status).json({ message });
 });
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5000;
-
 // Initialize server asynchronously
 async function startServer() {
   try {
-    // Create HTTP server and initialize routes
     const server = registerRoutes(app);
-
-    // Always use Vite in development for now
     await setupVite(app, server);
 
-    // Start server only after Vite is setup
-    server.listen(PORT, '0.0.0.0', () => {
-      log(`Server started successfully on port ${PORT}`);
-    }).on('error', (error: any) => {
-      console.error('Server startup error:', error);
-      process.exit(1);
-    });
-
+    // Try ports from 5000 to 5010
+    for (let port = 5000; port <= 5010; port++) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          server.listen(port, '0.0.0.0')
+            .once('listening', () => {
+              log(`Server started successfully on port ${port}`);
+              resolve();
+            })
+            .once('error', (err: any) => {
+              if (err.code === 'EADDRINUSE') {
+                log(`Port ${port} in use, trying next port...`);
+                server.close();
+              } else {
+                reject(err);
+              }
+            });
+        });
+        // If we get here, the server started successfully
+        break;
+      } catch (err) {
+        if (port === 5010) {
+          throw new Error('No available ports found between 5000 and 5010');
+        }
+        continue;
+      }
+    }
   } catch (error) {
     console.error('Failed to initialize server:', error);
     process.exit(1);

@@ -6,6 +6,7 @@ import fileUpload from 'express-fileupload';
 import AdmZip from 'adm-zip';
 import path from 'path';
 import { handleQuery } from './services/claude';
+import type { Message } from './types';
 import { handleTerminal } from './terminal';
 import fs from 'fs/promises';
 

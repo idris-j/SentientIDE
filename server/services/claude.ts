@@ -29,10 +29,26 @@ export async function handleQuery(query: string, currentFile: string | null): Pr
       }]
     });
 
+    if (!response.content || response.content.length === 0) {
+      throw new Error('No response content received');
+    }
+
+    // Extract text from the response
+    let textContent = '';
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        textContent += block.text;
+      }
+    }
+
+    if (!textContent) {
+      throw new Error('No text content in response');
+    }
+
     return {
       id: Date.now().toString(),
       type: 'text',
-      content: response.content[0].text || 'No response received from AI'
+      content: textContent
     };
   } catch (error: any) {
     console.error('Error querying Claude:', error);
