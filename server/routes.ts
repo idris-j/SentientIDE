@@ -9,6 +9,7 @@ import { handleQuery, aiEventEmitter } from './services/nvidia';
 import type { Message } from './types';
 import { handleTerminal } from './terminal';
 import fs from 'fs/promises';
+import { getGitStatus, stageFile, commitChanges, pushChanges } from './services/git';
 
 // For SSE clients
 const clients = new Set<ServerResponse>();
@@ -77,7 +78,6 @@ export function registerRoutes(app: Express): Server {
 
   // Simple server startup with port handling
   // Return the server instance for proper initialization in index.ts
-  return httpServer;
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
@@ -140,19 +140,11 @@ export function registerRoutes(app: Express): Server {
 
   // SSE endpoint for IDE communication
   app.get('/api/sse', (req, res) => {
-    // Set appropriate headers for SSE
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no'
-    });
-
     try {
       const clientId = Date.now().toString();
       console.log(`New SSE connection: ${clientId}`);
-      
-      // Set SSE headers
+
+      // Set SSE headers only once
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
@@ -258,12 +250,13 @@ export function registerRoutes(app: Express): Server {
       console.error('Error setting up SSE connection:', error);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to establish SSE connection' });
-      } else {
-        try {
+      }
+      try {
+        if (!res.writableEnded) {
           res.end();
-        } catch (e) {
-          console.error('Error ending response:', e);
         }
+      } catch (e) {
+        console.error('Error ending response:', e);
       }
     }
   });
@@ -325,7 +318,7 @@ export function registerRoutes(app: Express): Server {
   // File upload endpoint
   app.post('/api/upload', async (req, res) => {
     console.log('Received upload request');
-    
+
     try {
       // Set CORS headers specifically for file upload
       res.header('Access-Control-Allow-Origin', '*');
@@ -339,11 +332,11 @@ export function registerRoutes(app: Express): Server {
 
       // Validate request
       if (!req.files || !('project' in req.files)) {
-        console.error('No valid files in request:', { 
-          hasFiles: !!req.files, 
-          fileKeys: req.files ? Object.keys(req.files) : [] 
+        console.error('No valid files in request:', {
+          hasFiles: !!req.files,
+          fileKeys: req.files ? Object.keys(req.files) : []
         });
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'No project file uploaded',
           details: 'Please ensure you are uploading a file with the field name "project"'
         });
@@ -359,7 +352,7 @@ export function registerRoutes(app: Express): Server {
       // Validate file type and structure
       if (Array.isArray(projectFile)) {
         console.error('Multiple files received instead of single file');
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Multiple file upload not supported',
           details: 'Please upload a single ZIP file'
         });
@@ -384,10 +377,10 @@ export function registerRoutes(app: Express): Server {
 
       const uploadPath = path.join(process.cwd(), 'uploads');
       console.log('Creating upload directory:', uploadPath);
-      
+
       try {
         await fs.mkdir(uploadPath, { recursive: true });
-        
+
         // Verify directory exists and is writable
         await fs.access(uploadPath, fs.constants.W_OK);
         console.log('Upload directory is ready and writable');
@@ -415,10 +408,10 @@ export function registerRoutes(app: Express): Server {
       try {
         await projectFile.mv(filePath);
         console.log('File uploaded successfully:', safeName);
-        res.status(200).json({ 
-          success: true, 
+        res.status(200).json({
+          success: true,
           filename: safeName,
-          path: filePath 
+          path: filePath
         });
       } catch (moveError) {
         console.error('Error moving uploaded file:', moveError);
@@ -527,21 +520,21 @@ export function registerRoutes(app: Express): Server {
       try {
         // First, ensure the directory exists
         await fs.mkdir(path.dirname(filePath), { recursive: true });
-        
+
         // Create a new file handler with exclusive write flag
         const fileHandle = await fs.open(filePath, 'wx');
-        
+
         try {
           // Close the file immediately after creation to ensure it's empty
           await fileHandle.close();
-          
+
           // Verify the file exists and is empty
           const stats = await fs.stat(filePath);
           if (stats.size !== 0) {
             // If somehow not empty, truncate it
             await fs.truncate(filePath, 0);
           }
-          
+
           console.log(`Created new empty file: ${safeName}`);
           res.json({
             success: true,
@@ -567,6 +560,55 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
+
+  app.get('/api/git/status', async (_req, res) => {
+    try {
+      const status = await getGitStatus();
+      res.json(status);
+    } catch (error) {
+      console.error('Error getting git status:', error);
+      res.status(500).json({ error: 'Failed to get git status' });
+    }
+  });
+
+  app.post('/api/git/stage', async (req, res) => {
+    try {
+      const { path } = req.body;
+      if (!path) {
+        return res.status(400).json({ error: 'File path is required' });
+      }
+      await stageFile(path);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error staging file:', error);
+      res.status(500).json({ error: 'Failed to stage file' });
+    }
+  });
+
+  app.post('/api/git/commit', async (req, res) => {
+    try {
+      const { message } = req.body;
+      if (!message) {
+        return res.status(400).json({ error: 'Commit message is required' });
+      }
+      await commitChanges(message);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error committing changes:', error);
+      res.status(500).json({ error: 'Failed to commit changes' });
+    }
+  });
+
+  app.post('/api/git/push', async (_req, res) => {
+    try {
+      await pushChanges();
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error pushing changes:', error);
+      res.status(500).json({ error: 'Failed to push changes' });
+    }
+  });
+
 
   return httpServer;
 }

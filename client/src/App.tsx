@@ -25,7 +25,7 @@ function IDELayout() {
             defaultSize={20} 
             minSize={15} 
             maxSize={25}
-            className="bg-sidebar p-2"
+            className="bg-sidebar-background p-2"
           >
             <Sidebar />
           </ResizablePanel>

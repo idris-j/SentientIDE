@@ -9,10 +9,10 @@ import {
   Code2,
   PanelLeft,
   Save,
-  FolderOpen,
 } from "lucide-react";
 import { useFile } from "@/lib/file-context";
 import { useTheme } from "@/lib/theme-context";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false);
@@ -32,8 +32,8 @@ export function CommandPalette() {
   }, []);
 
   const runCommand = React.useCallback((command: () => void) => {
-    command();
     setOpen(false);
+    command();
   }, []);
 
   return (
@@ -44,6 +44,9 @@ export function CommandPalette() {
       className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 max-w-[640px] w-full 
         bg-popover border border-border rounded-lg shadow-lg p-2 z-50"
     >
+      <VisuallyHidden>
+        <Command.DialogTitle>Command Menu</Command.DialogTitle>
+      </VisuallyHidden>
       <div className="flex items-center border-b border-border px-3 pb-3">
         <Search className="w-4 h-4 text-muted-foreground mr-2" />
         <Command.Input
