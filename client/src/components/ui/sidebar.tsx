@@ -1,21 +1,30 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft } from "lucide-react"
+import { PanelLeft, FileText, Folder, Settings, Moon, Sun, Monitor } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useTheme } from "@/lib/theme-context"
+import { useFile } from "@/lib/file-context"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useToast } from "@/hooks/use-toast"
+import { useState, useEffect } from 'react';
 
 const SIDEBAR_COOKIE_NAME = "sidebar:state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -734,9 +743,391 @@ const SidebarMenuSubButton = React.forwardRef<
 })
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
 
+
+interface FileNode {
+  name: string;
+  type: 'file' | 'folder';
+  children?: FileNode[];
+}
+
+interface SidebarContentProps {
+  onFileSelect?: (file: string) => void;
+}
+
+function EnhancedSidebarContent({ onFileSelect }: SidebarContentProps) {
+  const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
+  const { setCurrentFile, addFile } = useFile();
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
+  const [files, setFiles] = useState<FileNode[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [fileToRename, setFileToRename] = useState<{ path: string; name: string } | null>(null);
+  const [newFileName, setNewFileName] = useState('');
+
+  const fetchFiles = async () => {
+    try {
+      const response = await fetch('/api/files');
+      if (response.ok) {
+        const fileList = await response.json();
+        setFiles(fileList);
+      } else {
+        throw new Error('Failed to fetch files');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch file list',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchFiles();
+  }, []);
+
+  const handleDelete = async (filePath: string | string[]) => {
+    const paths = Array.isArray(filePath) ? filePath : [filePath];
+
+    try {
+      const response = await fetch('/api/files/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paths }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete files');
+      }
+
+      const failedFiles = data.results?.filter((r: { success: boolean }) => !r.success) || [];
+      if (failedFiles.length > 0) {
+        toast({
+          title: 'Warning',
+          description: `Failed to delete ${failedFiles.length} files`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: paths.length === 1 
+            ? 'File deleted successfully'
+            : `${paths.length} files deleted successfully`,
+        });
+      }
+
+      fetchFiles();
+      setSelectedFiles(new Set());
+      setCurrentFile(null);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete files',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDuplicate = async (filePath: string | string[]) => {
+    const paths = Array.isArray(filePath) ? filePath : [filePath];
+
+    try {
+      const response = await fetch('/api/files/duplicate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paths }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to duplicate files');
+      }
+
+      const failedFiles = data.results?.filter((r: { success: boolean }) => !r.success) || [];
+      if (failedFiles.length > 0) {
+        toast({
+          title: 'Warning',
+          description: `Failed to duplicate ${failedFiles.length} files`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: paths.length === 1 
+            ? 'File duplicated successfully'
+            : `${paths.length} files duplicated successfully`,
+        });
+      }
+
+      fetchFiles();
+      setSelectedFiles(new Set());
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to duplicate files',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRename = (filePath: string, nodeType: 'file' | 'folder') => {
+    const basename = filePath.split('/').pop() || '';
+    setFileToRename({ path: filePath, name: basename });
+    setNewFileName(basename);
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!fileToRename || !newFileName) return;
+
+    try {
+      const response = await fetch('/api/files/rename', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ oldPath: fileToRename.path, newName: newFileName }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to rename file');
+      }
+
+      toast({
+        title: 'Success',
+        description: 'File renamed successfully',
+      });
+
+      setFileToRename(null);
+      fetchFiles();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to rename file',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const toggleFolder = (folderPath: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderPath)) {
+        next.delete(folderPath);
+      } else {
+        next.add(folderPath);
+      }
+      return next;
+    });
+  };
+
+  const handleFileSelection = (filePath: string, nodeType: 'file' | 'folder', event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedFiles(prev => {
+        const next = new Set(prev);
+        if (next.has(filePath)) {
+          next.delete(filePath);
+        } else {
+          next.add(filePath);
+        }
+        return next;
+      });
+    } else {
+      setSelectedFiles(new Set([filePath]));
+    }
+
+    if (nodeType === 'file') {
+      addFile(filePath);
+      onFileSelect?.(filePath);
+    }
+  };
+
+  const renderFileTree = (node: FileNode, depth = 0, currentPath = '') => {
+    const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
+    const isExpanded = expandedFolders.has(fullPath);
+    const isSelected = selectedFiles.has(fullPath);
+
+    return (
+      <div key={fullPath}>
+        <ContextMenu>
+          <ContextMenuTrigger>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "w-full justify-start gap-2 font-normal",
+                isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+                "focus-visible:bg-accent focus-visible:text-accent-foreground"
+              )}
+              style={{ paddingLeft: `${depth * 1.5}rem` }}
+              onClick={(e) => {
+                if (node.type === 'folder') {
+                  toggleFolder(fullPath);
+                }
+                handleFileSelection(fullPath, node.type, e);
+              }}
+            >
+              {node.type === 'folder' && (
+                <div className="w-4 h-4 flex items-center justify-center">
+                  {isExpanded ? '▼' : '▶'}
+                </div>
+              )}
+              {node.type === 'folder' ? <Folder className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+              {node.name}
+            </Button>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            {selectedFiles.size > 1 ? (
+              <>
+                <ContextMenuItem onClick={() => handleDuplicate(Array.from(selectedFiles))}>
+                  Duplicate ({selectedFiles.size} items)
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleDelete(Array.from(selectedFiles))} className="text-destructive">
+                  Delete ({selectedFiles.size} items)
+                </ContextMenuItem>
+              </>
+            ) : (
+              <>
+                <ContextMenuItem onClick={() => handleDuplicate(fullPath)}>
+                  Duplicate
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleDelete(fullPath)} className="text-destructive">
+                  Delete
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleRename(fullPath, node.type)}>
+                  Rename
+                </ContextMenuItem>
+              </>
+            )}
+          </ContextMenuContent>
+        </ContextMenu>
+        {fileToRename?.path === fullPath && (
+          <Popover open={true} onOpenChange={() => setFileToRename(null)}>
+            <PopoverContent className="w-80" align="start" side="bottom" sideOffset={5}>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm leading-none">Rename {fileToRename.name}</h4>
+                  <Input
+                    value={newFileName}
+                    onChange={(e) => setNewFileName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleRenameSubmit();
+                      } else if (e.key === 'Escape') {
+                        setFileToRename(null);
+                      }
+                    }}
+                    className="h-8"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setFileToRename(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={handleRenameSubmit}
+                  >
+                    Rename
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+        {node.type === 'folder' && isExpanded && node.children && (
+          <div>
+            {node.children.map(child => renderFileTree(child, depth + 1, fullPath))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-sidebar border-r">
+      <div className="p-4 border-b">
+        <h2 className="text-lg font-semibold">Files</h2>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          {files.map(file => renderFileTree(file))}
+        </div>
+      </ScrollArea>
+
+      <div className="p-4 border-t">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
+              <Settings className="h-4 w-4" />
+              Settings
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Settings</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Theme</label>
+                <Select
+                  defaultValue={theme}
+                  onValueChange={(value: "light" | "dark" | "system") => setTheme(value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">
+                      <div className="flex items-center gap-2">
+                        <Sun className="h-4 w-4" />
+                        Light
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="dark">
+                      <div className="flex items-center gap-2">
+                        <Moon className="h-4 w-4" />
+                        Dark
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="system">
+                      <div className="flex items-center gap-2">
+                        <Monitor className="h-4 w-4" />
+                        System
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  );
+}
+
 export {
   Sidebar,
   SidebarContent,
+  EnhancedSidebarContent,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupAction,

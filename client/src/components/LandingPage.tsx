@@ -1,9 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { Code2, Command, Terminal, GitBranch, Settings, Share2, Zap } from "lucide-react";
+import { Code2, Command, Terminal, GitBranch, Settings, Share2, Zap, Loader2 } from "lucide-react";
+import { useUser } from "@/hooks/use-user";
+import { useLocation } from "wouter";
 
 export function LandingPage() {
+  const { user, isLoading } = useUser();
+  const [, setLocation] = useLocation();
+
   const features = [
     { 
       icon: <Code2 className="h-6 w-6" />, 
@@ -36,6 +41,14 @@ export function LandingPage() {
       description: "Real-time code sharing and pair programming" 
     }
   ];
+
+  const handleLaunchIDE = () => {
+    if (user) {
+      setLocation('/editor');
+    } else {
+      setLocation('/auth');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-hidden">
@@ -91,11 +104,21 @@ export function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.4 }}
             >
-              <Link href="/auth">
-                <Button size="lg" className="px-8 bg-primary hover:bg-primary/90">
-                  Launch IDE
-                </Button>
-              </Link>
+              <Button 
+                size="lg" 
+                className="px-8 bg-primary hover:bg-primary/90"
+                onClick={handleLaunchIDE}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Launch IDE'
+                )}
+              </Button>
               <Button variant="outline" size="lg" asChild>
                 <a href="https://github.com/your-repo" target="_blank" rel="noopener">
                   View on GitHub
