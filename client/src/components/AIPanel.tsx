@@ -23,79 +23,43 @@ export function AIPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const [eventSource, setEventSource] = useState<EventSource | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const { currentFile } = useFile();
+  const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const maxReconnectAttempts = 3;
   const reconnectAttemptsRef = useRef(0);
 
-  const setupEventSource = async () => {
-    try {
-      // Clean up existing connection
-      if (eventSource) {
-        try {
-          eventSource.close();
-        } catch (err) {
-          console.error('Error closing existing EventSource:', err);
-        }
-        setEventSource(null);
+  useEffect(() => {
+    const setupEventSource = () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
 
-      // Wait for a short delay before reconnecting
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const source = new EventSource('/api/sse');
+      eventSourceRef.current = source;
 
-      // Initialize new connection with retry timeout
-      const newEventSource = new EventSource('/api/sse', { 
-        withCredentials: false 
-      });
-      
-      // Connection opened successfully
-      newEventSource.onopen = () => {
+      source.onopen = () => {
         console.log('SSE connection established');
         setIsConnected(true);
-        reconnectAttemptsRef.current = 0; // Reset reconnection attempts
-        setIsLoading(false); // Ensure loading state is reset
+        reconnectAttemptsRef.current = 0;
+        setIsLoading(false);
       };
 
-      newEventSource.onmessage = (event) => {
+      source.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
-          if (data.type === 'connection') {
-            console.log('SSE connection status:', data.status);
-            return;
-          }
 
-          if (data.type === 'heartbeat') {
-            console.log('Heartbeat received:', new Date(data.timestamp).toISOString());
+          if (data.type === 'connection' || data.type === 'heartbeat') {
             return;
           }
 
           if (data.type === 'error') {
-            if (data.content.includes('API key')) {
-              toast({
-                title: 'API Key Required',
-                description: 'Please set up your NVIDIA API key to use the IBM Granite code model.',
-                variant: 'destructive',
-              });
-            } else if (data.content.includes('rate limit')) {
-              toast({
-                title: 'Rate Limit',
-                description: 'Please wait a moment before sending another message.',
-                variant: 'destructive',
-              });
-            } else {
-              toast({
-                title: 'Error',
-                description: data.content,
-                variant: 'destructive',
-              });
-            }
-            setIsLoading(false);
+            handleErrorMessage(data.content);
             return;
           }
-          
+
           setMessages(prev => [...prev, {
             id: `${Date.now()}-${Math.random()}`,
             role: 'assistant',
@@ -111,70 +75,63 @@ export function AIPanel() {
         }
       };
 
-      newEventSource.onerror = (error) => {
-        console.error('SSE connection error:', error);
+      source.onerror = () => {
         setIsConnected(false);
-        newEventSource.close();
-        
+        source.close();
+
         if (reconnectAttemptsRef.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 5000);
           reconnectAttemptsRef.current++;
-          
-          console.log(`Attempting to reconnect (${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`);
-          
+
           if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
           }
-          
-          reconnectTimeoutRef.current = setTimeout(() => {
-            setupEventSource();
-          }, delay);
-          
-          toast({
-            title: 'Connection Error',
-            description: `Lost connection to server. Attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts}...`,
-            variant: 'destructive',
-          });
+
+          reconnectTimeoutRef.current = setTimeout(setupEventSource, delay);
         } else {
           toast({
             title: 'Connection Failed',
-            description: 'Unable to establish connection after multiple attempts. Please refresh the page.',
+            description: 'Unable to establish connection. Please refresh the page.',
             variant: 'destructive',
           });
         }
       };
-
-      setEventSource(newEventSource);
-    } catch (error) {
-      console.error('Error setting up EventSource:', error);
-      toast({
-        title: 'Connection Error',
-        description: 'Failed to establish server connection. Please refresh the page.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  useEffect(() => {
-    let mounted = true;
-    
-    const setup = async () => {
-      if (!mounted) return;
-      await setupEventSource();
     };
-    
-    setup();
-    
+
+    setupEventSource();
+
     return () => {
-      mounted = false;
-      if (eventSource) {
-        eventSource.close();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, []);
+  }, [toast]);
+
+  const handleErrorMessage = (content: string) => {
+    if (content.includes('API key')) {
+      toast({
+        title: 'API Key Required',
+        description: 'Please set up your NVIDIA API key.',
+        variant: 'destructive',
+      });
+    } else if (content.includes('rate limit')) {
+      toast({
+        title: 'Rate Limit',
+        description: 'Please wait a moment before sending another message.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Error',
+        description: content,
+        variant: 'destructive',
+      });
+    }
+    setIsLoading(false);
+  };
 
   const sendMessage = async (content: string, currentFile: string | null) => {
     try {
@@ -224,7 +181,7 @@ export function AIPanel() {
       await sendMessage(input, currentFile);
     } catch (error: any) {
       console.error('Message handling error:', error);
-      const errorMessage = error?.response?.data?.error || error?.message || 'Failed to get response';
+      const errorMessage = error?.message || 'Failed to get response';
       setMessages(prev => [...prev, {
         id: `${Date.now()}-${Math.random()}`,
         role: 'assistant',
@@ -232,7 +189,7 @@ export function AIPanel() {
         content: `Error: ${errorMessage}. Please try again.`
       }]);
       setIsLoading(false);
-      
+
       toast({
         title: 'Error',
         description: errorMessage,
@@ -269,7 +226,7 @@ export function AIPanel() {
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">AI Assistant</h2>
       </div>
-      
+
       <div className="flex flex-col h-[calc(100%-8rem)]">
         <ScrollArea className="flex-1 p-4" ref={scrollRef}>
           <div className="space-y-4">

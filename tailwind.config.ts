@@ -69,6 +69,14 @@ export default {
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
+          hover: "hsl(var(--sidebar-hover))", // Added from edited snippet
+        },
+        editor: { // Added from edited snippet
+          bg: "hsl(var(--editor-bg))",
+          line: "hsl(var(--editor-line))",
+          selection: "hsl(var(--editor-selection))",
+          gutter: "hsl(var(--editor-gutter))",
+          highlight: "hsl(var(--editor-highlight))",
         },
       },
       keyframes: {

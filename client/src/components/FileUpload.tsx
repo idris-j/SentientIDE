@@ -18,7 +18,7 @@ export function FileUpload({ onUploadSuccess }: FileUploadProps) {
     if (!file.name.endsWith('.zip')) {
       toast({
         title: 'Invalid file type',
-        description: 'Only .zip files are supported. Please compress your project folder into a .zip file before uploading.',
+        description: 'Only .zip files are supported. Please compress your project folder into a zip file before uploading.',
         variant: 'destructive',
       });
       // Reset the input
@@ -39,50 +39,43 @@ export function FileUpload({ onUploadSuccess }: FileUploadProps) {
         type: file.type
       });
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
         credentials: 'include',
-        signal: controller.signal,
         headers: {
           'Accept': 'application/json',
         },
+        // Remove signal and timeout to prevent connection issues
       });
 
-      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(data.error || 'Failed to upload project');
+      }
 
       const data = await response.json();
       console.log('Upload response:', data);
-      
-      if (response.ok) {
-        toast({
-          title: 'Success',
-          description: 'Project uploaded successfully',
-        });
-        // Reset the input
-        if (event.target) {
-          event.target.value = '';
-        }
-        // Trigger refresh
-        onUploadSuccess?.();
-      } else {
-        throw new Error(data.error || data.details || 'Failed to upload project');
+
+      toast({
+        title: 'Success',
+        description: 'Project uploaded successfully',
+      });
+
+      // Reset the input
+      if (event.target) {
+        event.target.value = '';
       }
+      // Trigger refresh
+      onUploadSuccess?.();
     } catch (error) {
       console.error('Upload error:', error);
       let errorMessage = 'Failed to upload project';
-      
+
       if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          errorMessage = 'Upload timed out. Please try again with a smaller file or check your connection.';
-        } else {
-          errorMessage = error.message;
-        }
+        errorMessage = error.message;
       }
-      
+
       toast({
         title: 'Error',
         description: errorMessage,
