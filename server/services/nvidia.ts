@@ -2,29 +2,36 @@ import { EventEmitter } from "events";
 import { OpenAI } from "openai";
 import type { Message } from "../types";
 
-const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY_AIDEVSPHERE;
-const MODEL_NAME = "ibm/granite-34b-code-instruct";
-
 // Create an event emitter for streaming responses
 export const aiEventEmitter = new EventEmitter();
 
 let client: OpenAI | null = null;
+const MODEL_NAME = "ibm/granite-34b-code-instruct";
 
-function initializeClient() {
-  if (!NVIDIA_API_KEY) {
+function getApiKey(): string {
+  const apiKey = process.env.NVIDIA_API_KEY_AIDEVSPHERE;
+  if (!apiKey) {
     console.error("NVIDIA_API_KEY_AIDEVSPHERE is not set in environment variables");
     throw new Error("NEED_NEW_API_KEY");
   }
+  return apiKey;
+}
 
-  if (!client) {
-    client = new OpenAI({
-      baseURL: "https://integrate.api.nvidia.com/v1",
-      apiKey: NVIDIA_API_KEY,
-    });
-    console.log("NVIDIA API client initialized successfully");
+function initializeClient() {
+  try {
+    if (!client) {
+      const apiKey = getApiKey();
+      client = new OpenAI({
+        baseURL: "https://integrate.api.nvidia.com/v1",
+        apiKey: apiKey,
+      });
+      console.log("NVIDIA API client initialized successfully");
+    }
+    return client;
+  } catch (error) {
+    console.error("Failed to initialize NVIDIA API client:", error);
+    throw error;
   }
-
-  return client;
 }
 
 export async function handleQuery(

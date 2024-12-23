@@ -7,6 +7,7 @@ import { MenuBar } from '@/components/MenuBar';
 import { TabsView } from '@/components/TabsView';
 import { ThemeProvider } from '@/lib/theme-context';
 import { FileProvider } from '@/lib/file-context';
+import { Footer } from '@/components/Footer';
 
 function App() {
   return (
@@ -19,23 +20,24 @@ function App() {
               <ResizablePanel defaultSize={20} minSize={15} maxSize={25}>
                 <Sidebar />
               </ResizablePanel>
-              
+
               <ResizableHandle withHandle />
-              
+
               <ResizablePanel defaultSize={50}>
                 <div className="h-full flex flex-col">
                   <TabsView />
-                  
+
                 </div>
               </ResizablePanel>
-              
+
               <ResizableHandle withHandle />
-              
+
               <ResizablePanel defaultSize={30}>
                 <AIPanel />
               </ResizablePanel>
             </ResizablePanelGroup>
           </div>
+          <Footer />
         </div>
       </FileProvider>
     </ThemeProvider>

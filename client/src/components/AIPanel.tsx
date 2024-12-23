@@ -30,7 +30,7 @@ export function AIPanel() {
   const maxReconnectAttempts = 3;
   const reconnectAttemptsRef = useRef(0);
 
-  const setupEventSource = () => {
+  const setupEventSource = async () => {
     try {
       // Clean up existing connection
       if (eventSource) {
@@ -42,8 +42,13 @@ export function AIPanel() {
         setEventSource(null);
       }
 
-      // Initialize new connection
-      const newEventSource = new EventSource('/api/sse', { withCredentials: false });
+      // Wait for a short delay before reconnecting
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Initialize new connection with retry timeout
+      const newEventSource = new EventSource('/api/sse', { 
+        withCredentials: false 
+      });
       
       // Connection opened successfully
       newEventSource.onopen = () => {
@@ -151,9 +156,17 @@ export function AIPanel() {
   };
 
   useEffect(() => {
-    setupEventSource();
+    let mounted = true;
+    
+    const setup = async () => {
+      if (!mounted) return;
+      await setupEventSource();
+    };
+    
+    setup();
     
     return () => {
+      mounted = false;
       if (eventSource) {
         eventSource.close();
       }

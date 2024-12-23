@@ -33,14 +33,26 @@ export function FileUpload({ onUploadSuccess }: FileUploadProps) {
     formData.append('project', file);
 
     try {
-      console.log('Uploading file:', file.name);
+      console.log('Starting file upload:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
+        credentials: 'include',
+        signal: controller.signal,
         headers: {
           'Accept': 'application/json',
         },
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
       console.log('Upload response:', data);
@@ -57,13 +69,23 @@ export function FileUpload({ onUploadSuccess }: FileUploadProps) {
         // Trigger refresh
         onUploadSuccess?.();
       } else {
-        throw new Error(data.error || 'Failed to upload project');
+        throw new Error(data.error || data.details || 'Failed to upload project');
       }
     } catch (error) {
       console.error('Upload error:', error);
+      let errorMessage = 'Failed to upload project';
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'Upload timed out. Please try again with a smaller file or check your connection.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to upload project',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {

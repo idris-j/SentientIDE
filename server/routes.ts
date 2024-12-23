@@ -140,8 +140,17 @@ export function registerRoutes(app: Express): Server {
 
   // SSE endpoint for IDE communication
   app.get('/api/sse', (req, res) => {
+    // Set appropriate headers for SSE
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+
     try {
       const clientId = Date.now().toString();
+      console.log(`New SSE connection: ${clientId}`);
       
       // Set SSE headers
       res.writeHead(200, {
@@ -157,7 +166,10 @@ export function registerRoutes(app: Express): Server {
           if (!res.writableEnded) {
             const message = `data: ${JSON.stringify(data)}\n\n`;
             res.write(message);
-            res.flush?.(); // Flush data if method is available
+            // Use proper type checking for flush method
+            if (typeof (res as any).flush === 'function') {
+              (res as any).flush();
+            }
           }
         } catch (error) {
           console.error('Error sending SSE event:', error);
@@ -312,35 +324,111 @@ export function registerRoutes(app: Express): Server {
 
   // File upload endpoint
   app.post('/api/upload', async (req, res) => {
+    console.log('Received upload request');
+    
     try {
-      console.log('Upload request received:', req.files);
+      // Set CORS headers specifically for file upload
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Accept');
+      res.header('Access-Control-Allow-Credentials', 'true');
 
-      if (!req.files || !req.files.project) {
-        return res.status(400).json({ error: 'No file uploaded' });
+      if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+      }
+
+      // Validate request
+      if (!req.files || !('project' in req.files)) {
+        console.error('No valid files in request:', { 
+          hasFiles: !!req.files, 
+          fileKeys: req.files ? Object.keys(req.files) : [] 
+        });
+        return res.status(400).json({ 
+          error: 'No project file uploaded',
+          details: 'Please ensure you are uploading a file with the field name "project"'
+        });
       }
 
       const projectFile = req.files.project;
-      const uploadPath = path.join(process.cwd(), 'uploads');
+      console.log('Received file:', {
+        name: projectFile.name,
+        size: projectFile.size,
+        mimetype: projectFile.mimetype
+      });
 
-      console.log('Creating upload directory:', uploadPath);
-      await fs.mkdir(uploadPath, { recursive: true });
+      // Validate file type and structure
+      if (Array.isArray(projectFile)) {
+        console.error('Multiple files received instead of single file');
+        return res.status(400).json({ 
+          error: 'Multiple file upload not supported',
+          details: 'Please upload a single ZIP file'
+        });
+      }
+
+      console.log('Received file:', {
+        name: projectFile.name,
+        size: projectFile.size,
+        mimetype: projectFile.mimetype
+      });
 
       if (Array.isArray(projectFile)) {
+        console.error('Multiple files detected');
         return res.status(400).json({ error: 'Multiple file upload not supported' });
       }
 
-      const filePath = path.join(uploadPath, projectFile.name);
+      // Validate file type
+      if (!projectFile.name.endsWith('.zip')) {
+        console.error('Invalid file type:', projectFile.name);
+        return res.status(400).json({ error: 'Only ZIP files are allowed' });
+      }
+
+      const uploadPath = path.join(process.cwd(), 'uploads');
+      console.log('Creating upload directory:', uploadPath);
+      
+      try {
+        await fs.mkdir(uploadPath, { recursive: true });
+        
+        // Verify directory exists and is writable
+        await fs.access(uploadPath, fs.constants.W_OK);
+        console.log('Upload directory is ready and writable');
+      } catch (mkdirError) {
+        console.error('Error with upload directory:', mkdirError);
+        if ((mkdirError as NodeJS.ErrnoException).code === 'EACCES') {
+          return res.status(500).json({ error: 'Permission denied: Cannot create upload directory' });
+        }
+        return res.status(500).json({ error: 'Failed to setup upload directory' });
+      }
+
+      // Create a .gitkeep file to ensure the uploads directory is tracked
+      try {
+        const gitkeepPath = path.join(uploadPath, '.gitkeep');
+        await fs.writeFile(gitkeepPath, '');
+      } catch (error) {
+        console.error('Error creating .gitkeep file:', error);
+        // Non-critical error, continue with upload
+      }
+
+      const safeName = path.basename(projectFile.name).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = path.join(uploadPath, safeName);
       console.log('Moving file to:', filePath);
 
-      await projectFile.mv(filePath);
-      console.log('File uploaded successfully');
-
-      res.json({ success: true, filename: projectFile.name });
+      try {
+        await projectFile.mv(filePath);
+        console.log('File uploaded successfully:', safeName);
+        res.status(200).json({ 
+          success: true, 
+          filename: safeName,
+          path: filePath 
+        });
+      } catch (moveError) {
+        console.error('Error moving uploaded file:', moveError);
+        return res.status(500).json({ error: 'Failed to save uploaded file' });
+      }
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error('Upload error:', error);
       res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to upload file',
-        details: error
+        error: 'File upload failed',
+        details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
