@@ -784,6 +784,18 @@ function EnhancedSidebarContent({ onFileSelect }: SidebarContentProps) {
 
   useEffect(() => {
     fetchFiles();
+
+    // Add event listener for file tree refresh
+    const handleRefresh = () => {
+      fetchFiles();
+    };
+
+    window.addEventListener('refresh-files', handleRefresh);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('refresh-files', handleRefresh);
+    };
   }, []);
 
   const handleDelete = async (filePath: string | string[]) => {

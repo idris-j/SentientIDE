@@ -11,10 +11,35 @@ import { FileProvider } from '@/lib/file-context';
 import { AuthPage } from '@/components/AuthPage';
 import { LandingPage } from '@/components/LandingPage';
 import { CommandPalette } from '@/components/CommandPalette';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { Loader2 } from 'lucide-react';
 import { useLocation } from 'wouter';
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useUser();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      setLocation('/auth');
+    }
+  }, [user, isLoading, setLocation]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return <>{children}</>;
+}
 
 function IDELayout() {
   const [showTerminal, setShowTerminal] = useState(false);
@@ -22,7 +47,9 @@ function IDELayout() {
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
-      <MenuBar onToggleTerminal={() => setShowTerminal(prev => !prev)} />
+      <MenuBar 
+        onToggleTerminal={() => setShowTerminal(prev => !prev)} 
+      />
       <CommandPalette />
       <div className="flex-1 relative">
         <ResizablePanelGroup 
@@ -81,30 +108,16 @@ function IDELayout() {
   );
 }
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isLoading } = useUser();
-  const [, setLocation] = useLocation();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    setLocation('/auth');
-    return null;
-  }
-
-  return <Component />;
-}
-
 function App() {
   const { isLoading } = useUser();
+  const [, setLocation] = useLocation();
+  const [mounted, setMounted] = useState(false);
 
-  if (isLoading) {
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -119,7 +132,17 @@ function App() {
           <Route path="/" component={LandingPage} />
           <Route path="/auth" component={AuthPage} />
           <Route path="/editor">
-            {() => <ProtectedRoute component={IDELayout} />}
+            {() => (
+              <ProtectedRoute>
+                <IDELayout />
+              </ProtectedRoute>
+            )}
+          </Route>
+          <Route>
+            {() => {
+              setLocation('/');
+              return null;
+            }}
           </Route>
         </Switch>
       </FileProvider>

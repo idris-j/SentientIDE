@@ -45,16 +45,34 @@ export function setupAuth(app: Express) {
     cookie: {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
       secure: app.get("env") === "production",
-      sameSite: "lax"
+      sameSite: "lax",
+      path: "/"
     },
     store: new MemoryStore({
       checkPeriod: 86400000, // prune expired entries every 24h
     }),
   };
 
+  if (app.get("env") === "production") {
+    app.set("trust proxy", 1);
+    sessionSettings.cookie!.secure = true;
+  }
+
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
+
+  // CORS middleware
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
@@ -112,15 +130,15 @@ export function setupAuth(app: Express) {
     try {
       const { username, password } = req.body;
       if (!username || !password) {
-        return res.status(400).send("Username and password are required");
+        return res.status(400).json({ error: 'Username and password are required' });
       }
 
       if (username.length < 3 || username.length > 50) {
-        return res.status(400).send("Username must be between 3 and 50 characters");
+        return res.status(400).json({ error: 'Username must be between 3 and 50 characters' });
       }
 
       if (password.length < 6) {
-        return res.status(400).send("Password must be at least 6 characters");
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
       }
 
       // Check if user already exists
@@ -131,7 +149,7 @@ export function setupAuth(app: Express) {
         .limit(1);
 
       if (existingUser) {
-        return res.status(400).send("Username already exists");
+        return res.status(400).json({ error: 'Username already exists' });
       }
 
       // Hash the password
@@ -167,16 +185,16 @@ export function setupAuth(app: Express) {
   app.post("/api/login", (req, res, next) => {
     const { username, password } = req.body;
     if (!username || !password) {
-      return res.status(400).send("Username and password are required");
+      return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const cb = (err: any, user: Express.User | false, info: IVerifyOptions) => {
+    passport.authenticate("local", (err: any, user: Express.User | false, info: IVerifyOptions) => {
       if (err) {
         return next(err);
       }
 
       if (!user) {
-        return res.status(400).send(info.message ?? "Login failed");
+        return res.status(400).json({ error: info.message ?? "Login failed" });
       }
 
       req.logIn(user, (err) => {
@@ -189,15 +207,13 @@ export function setupAuth(app: Express) {
           user,
         });
       });
-    };
-
-    passport.authenticate("local", cb)(req, res, next);
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res) => {
     req.logout((err) => {
       if (err) {
-        return res.status(500).send("Logout failed");
+        return res.status(500).json({ error: 'Logout failed' });
       }
 
       res.json({ message: "Logout successful" });
@@ -208,7 +224,6 @@ export function setupAuth(app: Express) {
     if (req.isAuthenticated()) {
       return res.json(req.user);
     }
-
-    res.status(401).send("Not logged in");
+    res.status(401).json({ error: 'Not logged in' });
   });
 }

@@ -13,8 +13,10 @@ import {
 } from "@/components/ui/menubar"
 import { useTheme } from "@/lib/theme-context"
 import { useFile } from "@/lib/file-context"
-import { FileText, Save, FolderOpen, FileIcon, Copy, Scissors, Clipboard, RotateCcw, RotateCw, Terminal } from "lucide-react"
+import { FileText, Save, FolderOpen, FileIcon, Copy, Scissors, Clipboard, RotateCcw, RotateCw, Terminal, LogOut } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useUser } from "@/hooks/use-user"
+import { useLocation } from 'wouter'
 
 interface MenuBarProps {
   onToggleTerminal: () => void;
@@ -24,6 +26,8 @@ export function MenuBar({ onToggleTerminal }: MenuBarProps) {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const { currentFile, addFile, saveFile } = useFile();
+  const { logout } = useUser();
+  const [, setLocation] = useLocation();
   const [isSidebarVisible, setIsSidebarVisible] = React.useState(true);
   const [isEditorSplit, setIsEditorSplit] = React.useState(false);
 
@@ -41,6 +45,8 @@ export function MenuBar({ onToggleTerminal }: MenuBarProps) {
             title: 'Success',
             description: 'Folder opened successfully',
           });
+          // Trigger file tree refresh
+          window.dispatchEvent(new CustomEvent('refresh-files'));
         }
       };
       input.click();
@@ -64,7 +70,13 @@ export function MenuBar({ onToggleTerminal }: MenuBarProps) {
           const reader = new FileReader();
           reader.onload = async (e) => {
             if (e.target?.result) {
-              addFile(file.name);
+              await addFile(file.name);
+              // Trigger file tree refresh
+              window.dispatchEvent(new CustomEvent('refresh-files'));
+              toast({
+                title: 'Success',
+                description: 'File opened successfully',
+              });
             }
           };
           reader.readAsText(file);
@@ -95,8 +107,9 @@ export function MenuBar({ onToggleTerminal }: MenuBarProps) {
       const fileName = prompt('Enter file name:', 'untitled.ts');
       if (!fileName) return;
 
-      // Create a new file with the given name
-      addFile(fileName);
+      await addFile(fileName);
+      // Trigger file tree refresh
+      window.dispatchEvent(new CustomEvent('refresh-files'));
 
       toast({
         title: 'Success',
@@ -111,30 +124,21 @@ export function MenuBar({ onToggleTerminal }: MenuBarProps) {
     }
   };
 
-  const saveFileAs = async (oldPath: string, newPath: string) => {
-    const editor = (window as any).monaco?.editor
-      .getModels()
-      .find((model: any) => model.uri.path === oldPath);
-
-    if (!editor) {
-      throw new Error('File not found in editor');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setLocation('/auth');
+      toast({
+        title: 'Success',
+        description: 'Logged out successfully',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to logout',
+        variant: 'destructive',
+      });
     }
-
-    const content = editor.getValue();
-
-    const response = await fetch(`/api/files/save`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ path: newPath, content }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to save file');
-    }
-
-    addFile(newPath);
   };
 
   const handleSaveAs = async () => {
@@ -190,57 +194,14 @@ export function MenuBar({ onToggleTerminal }: MenuBarProps) {
     }
   };
 
-  const handleCopy = () => {
-    const editor = (window as any).monaco?.editor.getActiveEditor();
-    if (editor) {
-      editor.getAction('editor.action.clipboardCopyAction').run();
-      toast({
-        title: 'Success',
-        description: 'Copied to clipboard',
-      });
+  const saveFileAs = async (oldPath: string, newPath: string) => {
+    try {
+      await saveFile(newPath);
+      window.dispatchEvent(new CustomEvent('refresh-files'));
+    } catch (error) {
+      throw new Error('Failed to save file');
     }
   };
-
-  const handleCut = () => {
-    const editor = (window as any).monaco?.editor.getActiveEditor();
-    if (editor) {
-      editor.getAction('editor.action.clipboardCutAction').run();
-    }
-  };
-
-  const handlePaste = () => {
-    const editor = (window as any).monaco?.editor.getActiveEditor();
-    if (editor) {
-      editor.getAction('editor.action.clipboardPasteAction').run();
-    }
-  };
-
-  const handleUndo = () => {
-    const editor = (window as any).monaco?.editor.getActiveEditor();
-    if (editor) {
-      editor.trigger('keyboard', 'undo', null);
-    }
-  };
-
-  const handleRedo = () => {
-    const editor = (window as any).monaco?.editor.getActiveEditor();
-    if (editor) {
-      editor.trigger('keyboard', 'redo', null);
-    }
-  };
-
-  // Add keyboard shortcut handler for terminal
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === '`' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        onToggleTerminal();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onToggleTerminal]);
 
   return (
     <Menubar className="border-b px-2 lg:px-4">
@@ -250,9 +211,6 @@ export function MenuBar({ onToggleTerminal }: MenuBarProps) {
           <MenubarItem onClick={handleNewFile}>
             <FileIcon className="mr-2 h-4 w-4" />
             New File <MenubarShortcut>⌘N</MenubarShortcut>
-          </MenubarItem>
-          <MenubarItem onSelect={() => window.open(window.location.href, '_blank')}>
-            New Window <MenubarShortcut>⇧⌘N</MenubarShortcut>
           </MenubarItem>
           <MenubarSeparator />
           <MenubarSub>
@@ -274,32 +232,10 @@ export function MenuBar({ onToggleTerminal }: MenuBarProps) {
             Save <MenubarShortcut>⌘S</MenubarShortcut>
           </MenubarItem>
           <MenubarItem onClick={handleSaveAs}>Save As... <MenubarShortcut>⇧⌘S</MenubarShortcut></MenubarItem>
-        </MenubarContent>
-      </MenubarMenu>
-
-      <MenubarMenu>
-        <MenubarTrigger className="font-bold">Edit</MenubarTrigger>
-        <MenubarContent>
-          <MenubarItem onClick={handleUndo}>
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Undo <MenubarShortcut>⌘Z</MenubarShortcut>
-          </MenubarItem>
-          <MenubarItem onClick={handleRedo}>
-            <RotateCw className="mr-2 h-4 w-4" />
-            Redo <MenubarShortcut>⇧⌘Z</MenubarShortcut>
-          </MenubarItem>
           <MenubarSeparator />
-          <MenubarItem onClick={handleCut}>
-            <Scissors className="mr-2 h-4 w-4" />
-            Cut <MenubarShortcut>⌘X</MenubarShortcut>
-          </MenubarItem>
-          <MenubarItem onClick={handleCopy}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copy <MenubarShortcut>⌘C</MenubarShortcut>
-          </MenubarItem>
-          <MenubarItem onClick={handlePaste}>
-            <Clipboard className="mr-2 h-4 w-4" />
-            Paste <MenubarShortcut>⌘V</MenubarShortcut>
+          <MenubarItem onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
           </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
