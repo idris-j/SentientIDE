@@ -13,24 +13,20 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<ThemeAppearance>(() => {
-    const storedTheme = localStorage.getItem('theme') as ThemeAppearance;
-    return storedTheme || 'dark';
-  });
-
-  const [variant, setVariant] = useState<ThemeVariant>(() => {
-    return 'modern-dark';
-  });
+  const [theme, setTheme] = useState<ThemeAppearance>('dark');
+  const [variant, setVariant] = useState<ThemeVariant>('modern-dark');
 
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
 
-    let effectiveTheme: 'light' | 'dark' = theme === 'system' 
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-      : theme;
+    if (theme === 'system') {
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      root.classList.add(systemTheme);
+    } else {
+      root.classList.add(theme);
+    }
 
-    root.classList.add(effectiveTheme);
     localStorage.setItem('theme', theme);
 
     const presets = {
@@ -61,7 +57,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         'sidebar-foreground': '220 10% 90%',
         'sidebar-border': '220 13% 15%',
         'sidebar-hover': '220 13% 13%',
-        radius: 0.5
       }
     };
 
@@ -87,7 +82,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     }
-  }, [theme, variant]);
+  }, [theme]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, variant, setVariant }}>

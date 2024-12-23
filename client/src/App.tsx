@@ -9,11 +9,13 @@ import { TabsView } from '@/components/TabsView';
 import { ThemeProvider } from '@/lib/theme-context';
 import { FileProvider } from '@/lib/file-context';
 import { LandingPage } from '@/components/LandingPage';
+import { CommandPalette } from '@/components/CommandPalette';
 
 function IDELayout() {
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
       <MenuBar />
+      <CommandPalette />
       <div className="flex-1 relative">
         <ResizablePanelGroup 
           direction="horizontal" 

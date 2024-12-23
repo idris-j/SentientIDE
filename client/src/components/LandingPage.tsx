@@ -1,106 +1,236 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import { motion } from "framer-motion";
+import { Code2, Command, Terminal, GitBranch, Settings, Share2, Zap } from "lucide-react";
 
 export function LandingPage() {
+  const features = [
+    { 
+      icon: <Code2 className="h-6 w-6" />, 
+      title: "AI-Powered Coding",
+      description: "Smart code suggestions and real-time assistance powered by advanced AI" 
+    },
+    { 
+      icon: <Command className="h-6 w-6" />, 
+      title: "Command Palette",
+      description: "Quick access to all IDE features through a powerful command interface" 
+    },
+    { 
+      icon: <Terminal className="h-6 w-6" />, 
+      title: "Integrated Terminal",
+      description: "Built-in terminal for seamless development workflow" 
+    },
+    { 
+      icon: <GitBranch className="h-6 w-6" />, 
+      title: "Git Integration",
+      description: "Version control right from your IDE" 
+    },
+    { 
+      icon: <Settings className="h-6 w-6" />, 
+      title: "Customizable",
+      description: "Personalize your workspace with themes and extensions" 
+    },
+    { 
+      icon: <Share2 className="h-6 w-6" />, 
+      title: "Collaboration",
+      description: "Real-time code sharing and pair programming" 
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground overflow-hidden">
       {/* Hero Section */}
-      <div className="relative px-6 lg:px-8">
-        <div className="mx-auto max-w-3xl pt-20 pb-32 sm:pt-48 sm:pb-40">
-          <div>
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight sm:text-center sm:text-6xl">
-                Modern AI-Powered IDE
-              </h1>
-              <p className="mt-6 text-lg leading-8 text-muted-foreground sm:text-center">
-                Experience the future of coding with our intelligent development environment.
-                Featuring AI assistance, modern interface, and powerful developer tools.
-              </p>
-              <div className="mt-8 flex gap-x-4 sm:justify-center">
-                <Link href="/editor">
-                  <Button size="lg" className="px-8">
-                    Launch IDE
-                  </Button>
-                </Link>
-                <Button variant="outline" size="lg" asChild>
-                  <a href="https://github.com/your-repo" target="_blank" rel="noopener">
-                    View on GitHub
-                  </a>
+      <div className="relative">
+        {/* Floating Elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(5)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute bg-primary/10 rounded-full"
+              style={{
+                width: Math.random() * 300 + 100,
+                height: Math.random() * 300 + 100,
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+              }}
+              animate={{
+                y: [0, 30, 0],
+                opacity: [0.5, 0.8, 0.5],
+              }}
+              transition={{
+                duration: 5 + Math.random() * 3,
+                repeat: Infinity,
+                delay: i * 0.7,
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="relative px-6 lg:px-8 pt-20 pb-32 sm:pt-48 sm:pb-40">
+          <div className="mx-auto max-w-3xl text-center">
+            <motion.h1 
+              className="text-4xl font-bold tracking-tight sm:text-6xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/50"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+            >
+              Modern AI-Powered IDE
+            </motion.h1>
+            <motion.p 
+              className="mt-6 text-lg leading-8 text-muted-foreground"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+            >
+              Experience the future of coding with our intelligent development environment.
+              Featuring AI assistance, modern interface, and powerful developer tools.
+            </motion.p>
+            <motion.div 
+              className="mt-8 flex gap-x-4 justify-center"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+            >
+              <Link href="/editor">
+                <Button size="lg" className="px-8 bg-primary hover:bg-primary/90">
+                  Launch IDE
                 </Button>
-              </div>
-            </div>
+              </Link>
+              <Button variant="outline" size="lg" asChild>
+                <a href="https://github.com/your-repo" target="_blank" rel="noopener">
+                  View on GitHub
+                </a>
+              </Button>
+            </motion.div>
           </div>
         </div>
       </div>
 
-      {/* Features Section */}
+      {/* Interface Preview */}
+      <motion.div 
+        className="relative mx-auto max-w-7xl px-6 lg:px-8 py-20"
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        viewport={{ once: true }}
+      >
+        <div className="overflow-hidden rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm shadow-2xl">
+          <div className="bg-card/70 p-2 flex items-center gap-2">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-destructive/70" />
+              <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
+              <div className="w-3 h-3 rounded-full bg-green-500/70" />
+            </div>
+            <div className="flex-1 text-xs text-muted-foreground text-center">
+              Advanced AI IDE
+            </div>
+          </div>
+          <div className="h-[400px] bg-background rounded-b-lg relative overflow-hidden">
+            {/* Code Editor Preview */}
+            <div className="absolute inset-0 bg-editor-bg p-4">
+              <pre className="text-sm text-muted-foreground">
+                <code>{`function example() {
+  // AI-powered code completion
+  const result = await ai.complete(
+    "Calculate fibonacci"
+  );
+
+  // Smart suggestions
+  return result.code;
+}`}</code>
+              </pre>
+              {/* Floating AI suggestion */}
+              <motion.div 
+                className="absolute right-8 top-8 bg-popover/95 backdrop-blur-sm rounded-lg p-4 border border-border shadow-lg"
+                animate={{ 
+                  y: [0, 10, 0],
+                  opacity: [0.9, 1, 0.9]
+                }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                }}
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <Zap className="h-4 w-4 text-primary" />
+                  <span>AI Suggestion</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Consider using memoization for better performance
+                </p>
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Features Grid */}
       <div className="py-24 sm:py-32">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl lg:text-center">
-            <h2 className="text-base font-semibold leading-7 text-primary">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/50">
               Powerful Features
             </h2>
-            <p className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-              Everything you need to code efficiently
+            <p className="mt-4 text-lg text-muted-foreground">
+              Everything you need for a modern development workflow
             </p>
           </div>
-          <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-4xl">
-            <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 lg:max-w-none lg:grid-cols-2 lg:gap-y-16">
-              <div className="relative pl-16">
-                <dt className="text-base font-semibold leading-7">
-                  <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  AI-Powered Assistance
-                </dt>
-                <dd className="mt-2 text-base leading-7 text-muted-foreground">
-                  Get intelligent code suggestions, real-time error detection, and context-aware completions powered by advanced AI.
-                </dd>
-              </div>
-              <div className="relative pl-16">
-                <dt className="text-base font-semibold leading-7">
-                  <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
-                    </svg>
-                  </div>
-                  Modern Interface
-                </dt>
-                <dd className="mt-2 text-base leading-7 text-muted-foreground">
-                  A clean, customizable dark theme interface designed for long coding sessions with excellent readability.
-                </dd>
-              </div>
-              <div className="relative pl-16">
-                <dt className="text-base font-semibold leading-7">
-                  <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                    </svg>
-                  </div>
-                  Smart File Management
-                </dt>
-                <dd className="mt-2 text-base leading-7 text-muted-foreground">
-                  Intuitive file management with quick navigation, smart search, and integrated version control.
-                </dd>
-              </div>
-              <div className="relative pl-16">
-                <dt className="text-base font-semibold leading-7">
-                  <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                  Customizable Settings
-                </dt>
-                <dd className="mt-2 text-base leading-7 text-muted-foreground">
-                  Personalize your development environment with customizable themes, keybindings, and extensions.
-                </dd>
-              </div>
-            </dl>
+          <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
+            {features.map((feature, i) => (
+              <motion.div
+                key={feature.title}
+                className="flex flex-col gap-4 rounded-lg border border-border/50 bg-card/50 p-6 backdrop-blur-sm"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                viewport={{ once: true }}
+              >
+                <div className="p-2 w-fit rounded-lg bg-primary/10">
+                  {feature.icon}
+                </div>
+                <h3 className="text-lg font-semibold">{feature.title}</h3>
+                <p className="text-sm text-muted-foreground">{feature.description}</p>
+              </motion.div>
+            ))}
           </div>
+        </div>
+      </div>
+
+      {/* Call to Action */}
+      <div className="relative py-24">
+        <div className="absolute inset-0 bg-primary/5 backdrop-blur-sm" />
+        <div className="relative mx-auto max-w-7xl px-6 lg:px-8 flex flex-col items-center text-center">
+          <motion.h2 
+            className="text-3xl font-bold tracking-tight sm:text-4xl"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            viewport={{ once: true }}
+          >
+            Start Coding Smarter Today
+          </motion.h2>
+          <motion.p 
+            className="mt-4 text-lg text-muted-foreground max-w-xl"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            viewport={{ once: true }}
+          >
+            Join developers worldwide who are already using our AI-powered IDE to write better code faster.
+          </motion.p>
+          <motion.div 
+            className="mt-8"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            viewport={{ once: true }}
+          >
+            <Link href="/editor">
+              <Button size="lg" className="px-8">
+                Get Started
+              </Button>
+            </Link>
+          </motion.div>
         </div>
       </div>
     </div>

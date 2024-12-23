@@ -1,6 +1,6 @@
 import express from "express";
 import { registerRoutes } from "./routes";
-import { setupVite } from "./vite";
+import { setupVite, serveStatic } from "./vite";
 
 const app = express();
 app.use(express.json());
@@ -29,20 +29,20 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 // Initialize server
 async function startServer() {
   try {
-    // Verify NVIDIA API key is set
-    if (!process.env.NVIDIA_API_KEY_AIDEVSPHERE) {
-      console.error("NVIDIA_API_KEY_AIDEVSPHERE is not set. Please configure the API key.");
-      process.exit(1);
+    const server = registerRoutes(app);
+
+    // In development, setup Vite middleware
+    if (process.env.NODE_ENV !== 'production') {
+      await setupVite(app, server);
+    } else {
+      // In production, serve static files
+      serveStatic(app);
     }
 
-    const server = registerRoutes(app);
-    await setupVite(app, server);
-
     const port = process.env.PORT ? parseInt(process.env.PORT) : 5100;
-    
+
     server.listen(port, '0.0.0.0', () => {
       console.log(`Server started successfully on port ${port}`);
-      console.log('NVIDIA API key is configured');
     }).on('error', (error: any) => {
       if (error.code === 'EADDRINUSE') {
         console.error(`Port ${port} is already in use`);
