@@ -5,8 +5,8 @@ import { WebSocketServer } from 'ws';
 import fileUpload from 'express-fileupload';
 import AdmZip from 'adm-zip';
 import path from 'path';
-import { db } from "@db";
-import { files, users } from "@db/schema";
+import { db } from "../db";
+import { files, users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { setupAuth } from "./auth";
 import { handleQuery, aiEventEmitter } from './services/nvidia';
@@ -337,7 +337,7 @@ export function registerRoutes(app: Express): Server {
   app.post('/api/upload', requireAuth, async (req, res) => {
     try {
       if (!req.files || !('project' in req.files)) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'No project file uploaded',
           details: 'Please ensure you are uploading a file with the field name "project"'
         });

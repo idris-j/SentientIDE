@@ -34,7 +34,10 @@ export const filesRelations = relations(files, ({ one }) => ({
 }));
 
 // Zod schemas for validation
-export const insertUserSchema = createInsertSchema(users);
+export const insertUserSchema = createInsertSchema(users, {
+  username: (schema) => schema.username.min(3).max(50),
+  password: (schema) => schema.password.min(6),
+});
 export const selectUserSchema = createSelectSchema(users);
 
 export const insertFileSchema = createInsertSchema(files);
