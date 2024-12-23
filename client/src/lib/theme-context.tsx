@@ -13,10 +13,8 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<ThemeAppearance>(
-    (localStorage.getItem('theme') as ThemeAppearance) || 'dark'
-  );
-  const [variant] = useState<ThemeVariant>('modern-dark');
+  const [theme, setTheme] = useState<ThemeAppearance>('dark');
+  const [variant, setVariant] = useState<ThemeVariant>('modern-dark');
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -86,15 +84,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [theme]);
 
-  const value = {
-    theme,
-    setTheme,
-    variant,
-    setVariant: (v: ThemeVariant) => v // no-op since we only support one variant for now
-  };
-
   return (
-    <ThemeContext.Provider value={value}>
+    <ThemeContext.Provider value={{ theme, setTheme, variant, setVariant }}>
       {children}
     </ThemeContext.Provider>
   );
