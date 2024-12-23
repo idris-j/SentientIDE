@@ -91,7 +91,7 @@ export function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.4 }}
             >
-              <Link href="/editor">
+              <Link href="/auth">
                 <Button size="lg" className="px-8 bg-primary hover:bg-primary/90">
                   Launch IDE
                 </Button>

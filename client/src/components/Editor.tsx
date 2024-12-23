@@ -5,7 +5,7 @@ import type * as Monaco from 'monaco-editor';
 import { useFile } from '@/lib/file-context';
 
 interface CodeEditorProps {
-  filePath: string;
+  filePath?: string | null;
 }
 
 export function CodeEditor({ filePath }: CodeEditorProps) {
@@ -14,6 +14,8 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
 
   useEffect(() => {
     const fetchContent = async () => {
+      if (!filePath) return;
+
       try {
         const response = await fetch(`/api/files/content?path=${encodeURIComponent(filePath)}`);
         if (response.ok) {
@@ -31,7 +33,7 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
 
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor;
-    
+
     // Store editor reference
     editorRef.current = editor;
 
@@ -45,15 +47,15 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
           editor.layout({ width, height });
         });
       });
-      
+
       resizeObserver.observe(container);
-      
+
       // Store cleanup function for unmounting
       (editor as any)._cleanup = () => {
         resizeObserver.disconnect();
       };
     }
-    
+
     // Add editor change listener
     editor.onDidChangeModelContent(() => {
       const value = editor.getValue();
@@ -77,6 +79,14 @@ export function CodeEditor({ filePath }: CodeEditorProps) {
       }
     };
   };
+
+  if (!filePath) {
+    return (
+      <Card className="h-full w-full rounded-none border-0 bg-background flex items-center justify-center text-muted-foreground">
+        Select a file to edit
+      </Card>
+    );
+  }
 
   return (
     <Card className="h-full w-full rounded-none border-0 bg-background">

@@ -12,6 +12,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { useToast } from '@/hooks/use-toast';
 import { FileUpload } from './FileUpload';
 import { cn } from '@/lib/utils';
+import { Dispatch, SetStateAction } from 'react';
 
 interface FileNode {
   name: string;
@@ -19,7 +20,11 @@ interface FileNode {
   children?: FileNode[];
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  onFileSelect: Dispatch<SetStateAction<string | null>>;
+}
+
+export function Sidebar({ onFileSelect }: SidebarProps) {
   const { toast } = useToast();
   const { theme, setTheme, variant, setVariant } = useTheme();
   const { setCurrentFile, addFile } = useFile();
@@ -225,6 +230,7 @@ export function Sidebar() {
 
     if (nodeType === 'file') {
       addFile(filePath);
+      onFileSelect(filePath); //Added this line to use the prop.
     }
   };
 

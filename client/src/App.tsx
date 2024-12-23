@@ -9,20 +9,16 @@ import { TabsView } from '@/components/TabsView';
 import { ThemeProvider } from '@/lib/theme-context';
 import { FileProvider } from '@/lib/file-context';
 import { AuthPage } from '@/components/AuthPage';
+import { LandingPage } from '@/components/LandingPage';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useState } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { Loader2 } from 'lucide-react';
+import { useLocation } from 'wouter';
 
 function IDELayout() {
   const [showTerminal, setShowTerminal] = useState(false);
-  const { user } = useUser();
-
-  // Redirect to / if not authenticated
-  if (!user) {
-    window.location.href = '/';
-    return null;
-  }
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
@@ -39,7 +35,7 @@ function IDELayout() {
             maxSize={25}
             className="bg-sidebar-background p-2"
           >
-            <Sidebar />
+            <Sidebar onFileSelect={setCurrentFilePath} />
           </ResizablePanel>
 
           <ResizableHandle withHandle className="bg-border" />
@@ -51,7 +47,7 @@ function IDELayout() {
             <TabsView />
             <ResizablePanelGroup direction="vertical">
               <ResizablePanel defaultSize={70}>
-                <CodeEditor />
+                <CodeEditor filePath={currentFilePath} />
               </ResizablePanel>
 
               {showTerminal && (
@@ -85,8 +81,28 @@ function IDELayout() {
   );
 }
 
+function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useUser();
+  const [, setLocation] = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    setLocation('/auth');
+    return null;
+  }
+
+  return <Component />;
+}
+
 function App() {
-  const { isLoading, user } = useUser();
+  const { isLoading } = useUser();
 
   if (isLoading) {
     return (
@@ -100,8 +116,11 @@ function App() {
     <ThemeProvider>
       <FileProvider>
         <Switch>
-          <Route path="/" component={!user ? AuthPage : IDELayout} />
-          <Route path="/editor" component={IDELayout} />
+          <Route path="/" component={LandingPage} />
+          <Route path="/auth" component={AuthPage} />
+          <Route path="/editor">
+            {() => <ProtectedRoute component={IDELayout} />}
+          </Route>
         </Switch>
       </FileProvider>
     </ThemeProvider>
