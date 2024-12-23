@@ -5,7 +5,7 @@ interface FileContextType {
   setCurrentFile: (path: string | null) => void;
   openFiles: string[];
   closeFile: (path: string) => void;
-  addFile: (path: string) => void;
+  addFile: (path: string) => Promise<void>;
   saveFile: (path: string) => Promise<void>;
 }
 
@@ -23,70 +23,89 @@ export function FileProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addFile = (path: string) => {
-    setOpenFiles((files) => {
-      if (!files.includes(path)) {
-        return [...files, path];
+  const addFile = async (path: string) => {
+    try {
+      // Check if file exists first
+      const checkResponse = await fetch(`/api/files/exists?path=${encodeURIComponent(path)}`);
+      const exists = await checkResponse.json();
+
+      if (!exists) {
+        // Create new file if it doesn't exist
+        const response = await fetch('/api/files/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ path, content: '' }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create file');
+        }
       }
-      return files;
-    });
-    setCurrentFile(path);
+
+      // Add to open files list if not already there
+      setOpenFiles((files) => {
+        if (!files.includes(path)) {
+          return [...files, path];
+        }
+        return files;
+      });
+
+      // Set as current file
+      setCurrentFile(path);
+
+      // Create Monaco editor model for the new file
+      const monaco = (window as any).monaco;
+      if (monaco) {
+        const uri = monaco.Uri.parse(path);
+        const existingModel = monaco.editor.getModel(uri);
+
+        if (!existingModel) {
+          const fileExtension = path.split('.').pop() || '';
+          const language = monaco.languages.getLanguages()
+            .find((lang: any) =>
+              lang.extensions?.some((ext: string) =>
+                ext.toLowerCase() === `.${fileExtension.toLowerCase()}`
+              )
+            )?.id || 'plaintext';
+
+          monaco.editor.createModel('', language, uri);
+        }
+      }
+    } catch (error) {
+      console.error('Error adding file:', error);
+      throw error;
+    }
   };
 
   const saveFile = async (path: string) => {
-    const editor = (window as any).monaco?.editor
-      .getModels()
-      .find((model: any) => model.uri.path === path);
-    
-    if (!editor) {
-      throw new Error('File not found in editor');
-    }
+    try {
+      const editor = (window as any).monaco?.editor
+        .getModels()
+        .find((model: any) => model.uri.path === path);
 
-    const content = editor.getValue();
-    
-    const response = await fetch(`/api/files/save`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ path, content }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to save file');
-    }
-  };
-
-  const saveFileAs = async (oldPath: string, newPath: string) => {
-    const editor = (window as any).monaco?.editor
-      .getModels()
-      .find((model: any) => model.uri.path === oldPath);
-    
-    if (!editor) {
-      throw new Error('File not found in editor');
-    }
-
-    const content = editor.getValue();
-    
-    const response = await fetch(`/api/files/save`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ path: newPath, content }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to save file');
-    }
-
-    setOpenFiles((files) => {
-      if (!files.includes(newPath)) {
-        return [...files.filter(f => f !== oldPath), newPath];
+      if (!editor) {
+        throw new Error('File not found in editor');
       }
-      return files;
-    });
-    setCurrentFile(newPath);
+
+      const content = editor.getValue();
+
+      const response = await fetch(`/api/files/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path, content }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save file');
+      }
+    } catch (error) {
+      console.error('Error saving file:', error);
+      throw error;
+    }
   };
 
   return (

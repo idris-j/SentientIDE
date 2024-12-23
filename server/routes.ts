@@ -5,6 +5,10 @@ import { WebSocketServer } from 'ws';
 import fileUpload from 'express-fileupload';
 import AdmZip from 'adm-zip';
 import path from 'path';
+import { db } from "@db";
+import { files, users } from "@db/schema";
+import { eq } from "drizzle-orm";
+import { setupAuth } from "./auth";
 import { handleQuery, aiEventEmitter } from './services/nvidia';
 import type { Message } from './types';
 import { handleTerminal } from './terminal';
@@ -38,7 +42,15 @@ async function findAvailablePort(startPort: number, maxAttempts: number = 10): P
 
 export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
-  const startPort = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+  setupAuth(app);
+
+  // Add authentication middleware
+  const requireAuth = (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    next();
+  };
 
   // Initialize WebSocket server
   const wss = new WebSocketServer({ noServer: true });
@@ -77,7 +89,6 @@ export function registerRoutes(app: Express): Server {
 
   // Simple server startup with port handling
   // Return the server instance for proper initialization in index.ts
-  return httpServer;
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
@@ -151,7 +162,7 @@ export function registerRoutes(app: Express): Server {
     try {
       const clientId = Date.now().toString();
       console.log(`New SSE connection: ${clientId}`);
-      
+
       // Set SSE headers
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -323,26 +334,9 @@ export function registerRoutes(app: Express): Server {
   const wsClients = new Map();
 
   // File upload endpoint
-  app.post('/api/upload', async (req, res) => {
-    console.log('Received upload request');
-    
+  app.post('/api/upload', requireAuth, async (req, res) => {
     try {
-      // Set CORS headers specifically for file upload
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Content-Type, Accept');
-      res.header('Access-Control-Allow-Credentials', 'true');
-
-      if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-      }
-
-      // Validate request
       if (!req.files || !('project' in req.files)) {
-        console.error('No valid files in request:', { 
-          hasFiles: !!req.files, 
-          fileKeys: req.files ? Object.keys(req.files) : [] 
-        });
         return res.status(400).json({ 
           error: 'No project file uploaded',
           details: 'Please ensure you are uploading a file with the field name "project"'
@@ -350,80 +344,48 @@ export function registerRoutes(app: Express): Server {
       }
 
       const projectFile = req.files.project;
-      console.log('Received file:', {
-        name: projectFile.name,
-        size: projectFile.size,
-        mimetype: projectFile.mimetype
-      });
-
-      // Validate file type and structure
       if (Array.isArray(projectFile)) {
-        console.error('Multiple files received instead of single file');
-        return res.status(400).json({ 
-          error: 'Multiple file upload not supported',
-          details: 'Please upload a single ZIP file'
-        });
-      }
-
-      console.log('Received file:', {
-        name: projectFile.name,
-        size: projectFile.size,
-        mimetype: projectFile.mimetype
-      });
-
-      if (Array.isArray(projectFile)) {
-        console.error('Multiple files detected');
         return res.status(400).json({ error: 'Multiple file upload not supported' });
       }
 
-      // Validate file type
-      if (!projectFile.name.endsWith('.zip')) {
-        console.error('Invalid file type:', projectFile.name);
-        return res.status(400).json({ error: 'Only ZIP files are allowed' });
-      }
+      // Handle zip file upload
+      if (projectFile.name.endsWith('.zip')) {
+        const zip = new AdmZip(projectFile.tempFilePath);
+        const entries = zip.getEntries();
 
-      const uploadPath = path.join(process.cwd(), 'uploads');
-      console.log('Creating upload directory:', uploadPath);
-      
-      try {
-        await fs.mkdir(uploadPath, { recursive: true });
-        
-        // Verify directory exists and is writable
-        await fs.access(uploadPath, fs.constants.W_OK);
-        console.log('Upload directory is ready and writable');
-      } catch (mkdirError) {
-        console.error('Error with upload directory:', mkdirError);
-        if ((mkdirError as NodeJS.ErrnoException).code === 'EACCES') {
-          return res.status(500).json({ error: 'Permission denied: Cannot create upload directory' });
+        // Insert all files from zip into database
+        for (const entry of entries) {
+          if (!entry.isDirectory) {
+            await db.insert(files).values({
+              name: path.basename(entry.entryName),
+              path: entry.entryName,
+              content: entry.getData().toString('utf8'),
+              userId: req.user.id,
+              isDirectory: false
+            });
+          }
         }
-        return res.status(500).json({ error: 'Failed to setup upload directory' });
-      }
 
-      // Create a .gitkeep file to ensure the uploads directory is tracked
-      try {
-        const gitkeepPath = path.join(uploadPath, '.gitkeep');
-        await fs.writeFile(gitkeepPath, '');
-      } catch (error) {
-        console.error('Error creating .gitkeep file:', error);
-        // Non-critical error, continue with upload
-      }
-
-      const safeName = path.basename(projectFile.name).replace(/[^a-zA-Z0-9._-]/g, '_');
-      const filePath = path.join(uploadPath, safeName);
-      console.log('Moving file to:', filePath);
-
-      try {
-        await projectFile.mv(filePath);
-        console.log('File uploaded successfully:', safeName);
-        res.status(200).json({ 
-          success: true, 
-          filename: safeName,
-          path: filePath 
+        return res.json({
+          success: true,
+          message: 'Zip file contents imported successfully'
         });
-      } catch (moveError) {
-        console.error('Error moving uploaded file:', moveError);
-        return res.status(500).json({ error: 'Failed to save uploaded file' });
       }
+
+      // Handle single file upload
+      const [uploadedFile] = await db.insert(files).values({
+        name: projectFile.name,
+        path: projectFile.name,
+        content: projectFile.data.toString('utf8'),
+        userId: req.user.id,
+        isDirectory: false
+      }).returning();
+
+      res.json({
+        success: true,
+        file: uploadedFile
+      });
+
     } catch (error) {
       console.error('Upload error:', error);
       res.status(500).json({
@@ -433,48 +395,97 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // File management endpoints
-  app.get('/api/files', async (_req, res) => {
+  // List user's files
+  app.get('/api/files', requireAuth, async (req, res) => {
     try {
-      const rootPath = process.cwd();
+      const userFiles = await db.query.files.findMany({
+        where: eq(files.userId, req.user.id),
+        orderBy: (files, { asc }) => [asc(files.name)]
+      });
 
-      const listFilesRecursive = async (dir: string, baseDir: string = ''): Promise<any[]> => {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
-        const files = await Promise.all(
-          entries.map(async (entry) => {
-            const relativePath = path.join(baseDir, entry.name);
-            const fullPath = path.join(dir, entry.name);
+      // Transform files into tree structure
+      const fileTree = userFiles.reduce((acc: any[], file) => {
+        const parts = file.path.split('/');
+        let current = acc;
 
-            if (entry.name.startsWith('.') || entry.name === 'node_modules') {
-              return [];
-            }
+        parts.forEach((part, idx) => {
+          if (!part) return;
 
-            if (entry.isDirectory()) {
-              const children = await listFilesRecursive(fullPath, relativePath);
-              return {
-                name: entry.name,
-                type: 'folder',
-                children
-              };
-            }
-
-            return {
-              name: entry.name,
-              type: 'file'
+          const existing = current.find(item => item.name === part);
+          if (existing && idx < parts.length - 1) {
+            current = existing.children;
+          } else if (!existing) {
+            const newItem = {
+              name: part,
+              type: idx === parts.length - 1 && !file.isDirectory ? 'file' : 'folder',
+              children: []
             };
-          })
-        );
+            current.push(newItem);
+            current = newItem.children;
+          }
+        });
 
-        return files.flat();
-      };
+        return acc;
+      }, []);
 
-      const fileList = await listFilesRecursive(rootPath);
-      res.json(fileList);
+      res.json(fileTree);
     } catch (error) {
       console.error('Error listing files:', error);
       res.status(500).json({ error: 'Failed to list files' });
     }
   });
+
+  // Create new file
+  app.post('/api/files/create', requireAuth, async (req, res) => {
+    try {
+      const { path: filePath, content = '' } = req.body;
+      if (!filePath) {
+        return res.status(400).json({ error: 'File path is required' });
+      }
+
+      // Create file record in database
+      const [newFile] = await db.insert(files)
+        .values({
+          name: path.basename(filePath),
+          path: filePath,
+          content,
+          userId: req.user.id,
+          isDirectory: false
+        })
+        .returning();
+
+      res.json({
+        success: true,
+        file: newFile
+      });
+    } catch (error) {
+      console.error('Error creating file:', error);
+      res.status(500).json({
+        error: 'Failed to create file',
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Check if file exists
+  app.get('/api/files/exists', requireAuth, async (req, res) => {
+    try {
+      const filePath = req.query.path as string;
+      if (!filePath) {
+        return res.status(400).json({ error: 'File path is required' });
+      }
+
+      const existingFile = await db.query.files.findFirst({
+        where: eq(files.path, filePath) && eq(files.userId, req.user.id)
+      });
+
+      res.json(!!existingFile);
+    } catch (error) {
+      console.error('Error checking file existence:', error);
+      res.status(500).json({ error: 'Failed to check file existence' });
+    }
+  });
+
 
   // Handle port conflicts by finding an available port
   httpServer.on('error', async (error: any) => {
@@ -489,82 +500,6 @@ export function registerRoutes(app: Express): Server {
       }
     } else {
       console.error('Server error:', error);
-    }
-  });
-
-  app.post('/api/files/new', async (req, res) => {
-    try {
-      const { name } = req.body;
-      if (!name) {
-        return res.status(400).json({ error: 'File name is required' });
-      }
-
-      // Sanitize and validate file path
-      const safeName = path.normalize(name).replace(/^(\.\.[\/\\])+/, '');
-      if (!safeName || safeName.includes('..')) {
-        return res.status(400).json({ error: 'Invalid file path' });
-      }
-
-      const filePath = path.join(process.cwd(), safeName);
-      const dirPath = path.dirname(filePath);
-
-      // Prevent writing outside of project directory
-      if (!filePath.startsWith(process.cwd())) {
-        return res.status(403).json({ error: 'Invalid file location' });
-      }
-
-      // Create directory if it doesn't exist
-      await fs.mkdir(dirPath, { recursive: true });
-
-      // Check if file exists
-      try {
-        await fs.access(filePath);
-        return res.status(409).json({ error: 'File already exists' });
-      } catch {
-        // File doesn't exist, proceed with creation
-      }
-
-      try {
-        // First, ensure the directory exists
-        await fs.mkdir(path.dirname(filePath), { recursive: true });
-        
-        // Create a new file handler with exclusive write flag
-        const fileHandle = await fs.open(filePath, 'wx');
-        
-        try {
-          // Close the file immediately after creation to ensure it's empty
-          await fileHandle.close();
-          
-          // Verify the file exists and is empty
-          const stats = await fs.stat(filePath);
-          if (stats.size !== 0) {
-            // If somehow not empty, truncate it
-            await fs.truncate(filePath, 0);
-          }
-          
-          console.log(`Created new empty file: ${safeName}`);
-          res.json({
-            success: true,
-            path: safeName,
-            content: ''
-          });
-        } catch (closeError) {
-          // If we fail during verification/closing, try to remove the file
-          await fs.unlink(filePath).catch(console.error);
-          throw closeError;
-        }
-      } catch (writeError) {
-        if ((writeError as NodeJS.ErrnoException).code === 'EEXIST') {
-          return res.status(409).json({ error: 'File already exists' });
-        }
-        throw writeError;
-      }
-    } catch (error) {
-      console.error('Error creating file:', error);
-      res.status(500).json({
-        error: 'Failed to create file',
-        details: error instanceof Error ? error.message : String(error)
-      });
     }
   });
 

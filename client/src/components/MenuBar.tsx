@@ -95,42 +95,9 @@ export function MenuBar({ onToggleTerminal }: MenuBarProps) {
       const fileName = prompt('Enter file name:', 'untitled.ts');
       if (!fileName) return;
 
-      const response = await fetch('/api/files/new', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: fileName }),
-      });
+      // Create a new file with the given name
+      addFile(fileName);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.details || 'Failed to create new file');
-      }
-
-      const data = await response.json();
-
-      const monaco = (window as any).monaco;
-      if (monaco) {
-        const uri = monaco.Uri.parse(data.path);
-
-        const existingModel = monaco.editor.getModel(uri);
-        if (existingModel) {
-          existingModel.dispose();
-        }
-
-        const fileExtension = data.path.split('.').pop() || '';
-        const language = monaco.languages.getLanguages()
-          .find((lang: any) =>
-            lang.extensions?.some((ext: string) =>
-              ext.toLowerCase() === `.${fileExtension.toLowerCase()}`
-            )
-          )?.id || 'plaintext';
-
-        monaco.editor.createModel('', language, uri);
-      }
-
-      addFile(data.path);
       toast({
         title: 'Success',
         description: 'New file created',
