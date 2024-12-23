@@ -1,3 +1,4 @@
+import { Route, Switch } from 'wouter';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Sidebar } from '@/components/Sidebar';
 import { CodeEditor } from '@/components/Editor';
@@ -7,35 +8,59 @@ import { MenuBar } from '@/components/MenuBar';
 import { TabsView } from '@/components/TabsView';
 import { ThemeProvider } from '@/lib/theme-context';
 import { FileProvider } from '@/lib/file-context';
+import { LandingPage } from '@/components/LandingPage';
+
+function IDELayout() {
+  return (
+    <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
+      <MenuBar />
+      <div className="flex-1 relative">
+        <ResizablePanelGroup 
+          direction="horizontal" 
+          className="h-full rounded-lg bg-background"
+        >
+          <ResizablePanel 
+            defaultSize={20} 
+            minSize={15} 
+            maxSize={25}
+            className="bg-sidebar p-2"
+          >
+            <Sidebar />
+          </ResizablePanel>
+
+          <ResizableHandle withHandle className="bg-border" />
+
+          <ResizablePanel 
+            defaultSize={50}
+            className="bg-editor-bg"
+          >
+            <div className="h-full flex flex-col">
+              <TabsView />
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle withHandle className="bg-border" />
+
+          <ResizablePanel 
+            defaultSize={30}
+            className="bg-card"
+          >
+            <AIPanel />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   return (
     <ThemeProvider>
       <FileProvider>
-        <div className="h-screen w-screen bg-background text-foreground flex flex-col">
-          <MenuBar />
-          <div className="flex-1">
-            <ResizablePanelGroup direction="horizontal" className="h-full">
-              <ResizablePanel defaultSize={20} minSize={15} maxSize={25}>
-                <Sidebar />
-              </ResizablePanel>
-
-              <ResizableHandle withHandle />
-
-              <ResizablePanel defaultSize={50}>
-                <div className="h-full flex flex-col">
-                  <TabsView />
-                </div>
-              </ResizablePanel>
-
-              <ResizableHandle withHandle />
-
-              <ResizablePanel defaultSize={30}>
-                <AIPanel />
-              </ResizablePanel>
-            </ResizablePanelGroup>
-          </div>
-        </div>
+        <Switch>
+          <Route path="/" component={LandingPage} />
+          <Route path="/editor" component={IDELayout} />
+        </Switch>
       </FileProvider>
     </ThemeProvider>
   );

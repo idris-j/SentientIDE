@@ -47,19 +47,6 @@ export default {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        chart: {
-          "1": "hsl(var(--chart-1))",
-          "2": "hsl(var(--chart-2))",
-          "3": "hsl(var(--chart-3))",
-          "4": "hsl(var(--chart-4))",
-          "5": "hsl(var(--chart-5))",
-        },
-        theme: {
-          professional: "hsl(var(--theme-professional))",
-          vibrant: "hsl(var(--theme-vibrant))",
-          minimal: "hsl(var(--theme-minimal))",
-          modern: "hsl(var(--theme-modern))",
-        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -69,9 +56,9 @@ export default {
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
-          hover: "hsl(var(--sidebar-hover))", // Added from edited snippet
+          hover: "hsl(var(--sidebar-hover))",
         },
-        editor: { // Added from edited snippet
+        editor: {
           bg: "hsl(var(--editor-bg))",
           line: "hsl(var(--editor-line))",
           selection: "hsl(var(--editor-selection))",

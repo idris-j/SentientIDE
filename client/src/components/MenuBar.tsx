@@ -13,13 +13,13 @@ import {
 } from "@/components/ui/menubar"
 import { useTheme } from "@/lib/theme-context"
 import { useFile } from "@/lib/file-context"
-import { FileText, Save, FolderOpen, Settings, FileIcon, Copy, Scissors, Clipboard, RotateCcw, RotateCw } from "lucide-react"
+import { FileText, Save, FolderOpen, FileIcon, Copy, Scissors, Clipboard, RotateCcw, RotateCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export function MenuBar() {
   const { toast } = useToast();
-  const { theme, setTheme, variant, setVariant } = useTheme();
-  const { currentFile, setCurrentFile, addFile, saveFile } = useFile();
+  const { theme, setTheme } = useTheme();
+  const { currentFile, addFile, saveFile } = useFile();
   const [isSidebarVisible, setIsSidebarVisible] = React.useState(true);
   const [isEditorSplit, setIsEditorSplit] = React.useState(false);
 
@@ -27,11 +27,12 @@ export function MenuBar() {
     try {
       const input = document.createElement('input');
       input.type = 'file';
-      input.webkitdirectory = true;
-      input.onchange = async (e) => {
-        const files = e.target.files;
+      (input as any).webkitdirectory = true;
+
+      input.onchange = async (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        const files = target.files;
         if (files?.length) {
-          // Handle folder upload logic
           toast({
             title: 'Success',
             description: 'Folder opened successfully',
@@ -52,14 +53,15 @@ export function MenuBar() {
     try {
       const input = document.createElement('input');
       input.type = 'file';
-      input.onchange = async (e) => {
-        const file = e.target.files?.[0];
+      input.onchange = async (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
         if (file) {
           const reader = new FileReader();
           reader.onload = async (e) => {
-            const content = e.target?.result;
-            // Handle file content
-            addFile(file.name);
+            if (e.target?.result) {
+              addFile(file.name);
+            }
           };
           reader.readAsText(file);
         }
@@ -76,13 +78,11 @@ export function MenuBar() {
 
   const handleToggleSidebar = () => {
     setIsSidebarVisible(!isSidebarVisible);
-    // Emit event for sidebar toggle
     window.dispatchEvent(new CustomEvent('toggle-sidebar'));
   };
 
   const handleSplitEditor = () => {
     setIsEditorSplit(!isEditorSplit);
-    // Emit event for editor split
     window.dispatchEvent(new CustomEvent('split-editor'));
   };
 
@@ -91,7 +91,6 @@ export function MenuBar() {
       const fileName = prompt('Enter file name:', 'untitled.ts');
       if (!fileName) return;
 
-      // Create new file on server
       const response = await fetch('/api/files/new', {
         method: 'POST',
         headers: {
@@ -106,19 +105,16 @@ export function MenuBar() {
       }
 
       const data = await response.json();
-      
-      // Initialize Monaco editor model with empty content
+
       const monaco = (window as any).monaco;
       if (monaco) {
         const uri = monaco.Uri.parse(data.path);
-        
-        // Always dispose existing model to ensure clean state
+
         const existingModel = monaco.editor.getModel(uri);
         if (existingModel) {
           existingModel.dispose();
         }
 
-        // Detect language from file extension
         const fileExtension = data.path.split('.').pop() || '';
         const language = monaco.languages.getLanguages()
           .find((lang: any) => 
@@ -127,10 +123,9 @@ export function MenuBar() {
             )
           )?.id || 'plaintext';
 
-        // Create new model with empty content
         monaco.editor.createModel('', language, uri);
       }
-      
+
       addFile(data.path);
       toast({
         title: 'Success',
@@ -143,6 +138,32 @@ export function MenuBar() {
         variant: 'destructive',
       });
     }
+  };
+
+  const saveFileAs = async (oldPath: string, newPath: string) => {
+    const editor = (window as any).monaco?.editor
+      .getModels()
+      .find((model: any) => model.uri.path === oldPath);
+
+    if (!editor) {
+      throw new Error('File not found in editor');
+    }
+
+    const content = editor.getValue();
+
+    const response = await fetch(`/api/files/save`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path: newPath, content }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to save file');
+    }
+
+    addFile(newPath);
   };
 
   const handleSaveAs = async () => {
@@ -237,7 +258,6 @@ export function MenuBar() {
     }
   };
 
-
   return (
     <Menubar className="border-b px-2 lg:px-4">
       <MenubarMenu>
@@ -310,7 +330,6 @@ export function MenuBar() {
           </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
-
     </Menubar>
-  )
+  );
 }
