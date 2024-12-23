@@ -8,12 +8,21 @@ import { MenuBar } from '@/components/MenuBar';
 import { TabsView } from '@/components/TabsView';
 import { ThemeProvider } from '@/lib/theme-context';
 import { FileProvider } from '@/lib/file-context';
-import { LandingPage } from '@/components/LandingPage';
+import { AuthPage } from '@/components/AuthPage';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useState } from 'react';
+import { useUser } from '@/hooks/use-user';
+import { Loader2 } from 'lucide-react';
 
 function IDELayout() {
   const [showTerminal, setShowTerminal] = useState(false);
+  const { user } = useUser();
+
+  // Redirect to / if not authenticated
+  if (!user) {
+    window.location.href = '/';
+    return null;
+  }
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
@@ -77,11 +86,21 @@ function IDELayout() {
 }
 
 function App() {
+  const { isLoading, user } = useUser();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <ThemeProvider>
       <FileProvider>
         <Switch>
-          <Route path="/" component={LandingPage} />
+          <Route path="/" component={!user ? AuthPage : IDELayout} />
           <Route path="/editor" component={IDELayout} />
         </Switch>
       </FileProvider>
