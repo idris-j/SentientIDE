@@ -1,6 +1,7 @@
 import { pgTable, text, serial, integer, boolean, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
+import { z } from "zod";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -33,7 +34,7 @@ export const filesRelations = relations(files, ({ one }) => ({
   }),
 }));
 
-// Zod schemas for validation
+// Zod schemas
 export const insertUserSchema = createInsertSchema(users, {
   username: (schema) => schema.username.min(3).max(50),
   password: (schema) => schema.password.min(6),
@@ -43,6 +44,7 @@ export const selectUserSchema = createSelectSchema(users);
 export const insertFileSchema = createInsertSchema(files);
 export const selectFileSchema = createSelectSchema(files);
 
+// Export types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type File = typeof files.$inferSelect;

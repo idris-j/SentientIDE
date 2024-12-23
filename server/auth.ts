@@ -28,10 +28,10 @@ const crypto = {
   },
 };
 
-// extend express user object with our schema
+// Extend express user object with our schema
 declare global {
   namespace Express {
-    interface User extends User { }
+    interface User extends Omit<User, 'password'> { }
   }
 }
 
@@ -78,13 +78,8 @@ export function setupAuth(app: Express) {
           return done(null, false, { message: "Incorrect password." });
         }
 
-        // Update last login time
-        await db
-          .update(users)
-          .set({ lastLogin: new Date() })
-          .where(eq(users.id, user.id));
-
-        return done(null, user);
+        const { password: _, ...userWithoutPassword } = user;
+        return done(null, userWithoutPassword);
       } catch (err) {
         return done(err);
       }
@@ -98,10 +93,16 @@ export function setupAuth(app: Express) {
   passport.deserializeUser(async (id: number, done) => {
     try {
       const [user] = await db
-        .select()
+        .select({
+          id: users.id,
+          username: users.username,
+          createdAt: users.createdAt,
+          lastLogin: users.lastLogin,
+        })
         .from(users)
         .where(eq(users.id, id))
         .limit(1);
+
       done(null, user);
     } catch (err) {
       done(err);
@@ -110,14 +111,18 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      const result = insertUserSchema.safeParse(req.body);
-      if (!result.success) {
-        return res
-          .status(400)
-          .send("Invalid input: " + result.error.issues.map(i => i.message).join(", "));
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).send("Username and password are required");
       }
 
-      const { username, password } = result.data;
+      if (username.length < 3 || username.length > 50) {
+        return res.status(400).send("Username must be between 3 and 50 characters");
+      }
+
+      if (password.length < 6) {
+        return res.status(400).send("Password must be at least 6 characters");
+      }
 
       // Check if user already exists
       const [existingUser] = await db
@@ -142,14 +147,17 @@ export function setupAuth(app: Express) {
         })
         .returning();
 
+      // Remove password from the response
+      const { password: _, ...userWithoutPassword } = newUser;
+
       // Log the user in after registration
-      req.login(newUser, (err) => {
+      req.login(userWithoutPassword, (err) => {
         if (err) {
           return next(err);
         }
         return res.json({
           message: "Registration successful",
-          user: { id: newUser.id, username: newUser.username },
+          user: userWithoutPassword,
         });
       });
     } catch (error) {
@@ -158,14 +166,12 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
-    const result = insertUserSchema.safeParse(req.body);
-    if (!result.success) {
-      return res
-        .status(400)
-        .send("Invalid input: " + result.error.issues.map(i => i.message).join(", "));
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).send("Username and password are required");
     }
 
-    const cb = (err: any, user: Express.User, info: IVerifyOptions) => {
+    const cb = (err: any, user: Express.User | false, info: IVerifyOptions) => {
       if (err) {
         return next(err);
       }
@@ -181,10 +187,11 @@ export function setupAuth(app: Express) {
 
         return res.json({
           message: "Login successful",
-          user: { id: user.id, username: user.username },
+          user,
         });
       });
     };
+
     passport.authenticate("local", cb)(req, res, next);
   });
 

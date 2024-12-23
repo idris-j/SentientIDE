@@ -1,6 +1,7 @@
 import express from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic } from "./vite";
+import { setupAuth } from "./auth";
 
 const app = express();
 app.use(express.json());
@@ -17,6 +18,9 @@ app.use((req, res, next) => {
   });
   next();
 });
+
+// Initialize authentication before routes
+setupAuth(app);
 
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -39,7 +43,7 @@ async function startServer() {
       serveStatic(app);
     }
 
-    const port = process.env.PORT ? parseInt(process.env.PORT) : 5100;
+    const port = process.env.PORT ? parseInt(process.env.PORT) : 5000;
 
     server.listen(port, '0.0.0.0', () => {
       console.log(`Server started successfully on port ${port}`);
