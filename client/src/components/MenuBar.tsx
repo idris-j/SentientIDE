@@ -13,10 +13,14 @@ import {
 } from "@/components/ui/menubar"
 import { useTheme } from "@/lib/theme-context"
 import { useFile } from "@/lib/file-context"
-import { FileText, Save, FolderOpen, FileIcon, Copy, Scissors, Clipboard, RotateCcw, RotateCw } from "lucide-react"
+import { FileText, Save, FolderOpen, FileIcon, Copy, Scissors, Clipboard, RotateCcw, RotateCw, Terminal } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-export function MenuBar() {
+interface MenuBarProps {
+  onToggleTerminal: () => void;
+}
+
+export function MenuBar({ onToggleTerminal }: MenuBarProps) {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const { currentFile, addFile, saveFile } = useFile();
@@ -117,8 +121,8 @@ export function MenuBar() {
 
         const fileExtension = data.path.split('.').pop() || '';
         const language = monaco.languages.getLanguages()
-          .find((lang: any) => 
-            lang.extensions?.some((ext: string) => 
+          .find((lang: any) =>
+            lang.extensions?.some((ext: string) =>
               ext.toLowerCase() === `.${fileExtension.toLowerCase()}`
             )
           )?.id || 'plaintext';
@@ -258,6 +262,19 @@ export function MenuBar() {
     }
   };
 
+  // Add keyboard shortcut handler for terminal
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '`' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        onToggleTerminal();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onToggleTerminal]);
+
   return (
     <Menubar className="border-b px-2 lg:px-4">
       <MenubarMenu>
@@ -327,6 +344,10 @@ export function MenuBar() {
           <MenubarSeparator />
           <MenubarItem onClick={handleToggleSidebar}>
             Toggle Sidebar <MenubarShortcut>⌘B</MenubarShortcut>
+          </MenubarItem>
+          <MenubarItem onClick={onToggleTerminal}>
+            <Terminal className="mr-2 h-4 w-4" />
+            Toggle Terminal <MenubarShortcut>⌘`</MenubarShortcut>
           </MenubarItem>
         </MenubarContent>
       </MenubarMenu>

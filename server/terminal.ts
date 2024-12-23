@@ -83,12 +83,12 @@ process.on('SIGTERM', () => {
 export function handleTerminal(ws: WebSocket) {
   try {
     log("New terminal connection established", "terminal");
-    
+
     // Start ping and cleanup intervals if not already started
     if (!pingInterval || !cleanupInterval) {
       startIntervals();
     }
-    
+
     const shell = os.platform() === "win32" ? "powershell.exe" : "bash";
     const ptyProcess = pty.spawn(shell, [], {
       name: "xterm-256color",
@@ -106,60 +106,62 @@ export function handleTerminal(ws: WebSocket) {
       lastActivity: Date.now()
     }
 
-    sessions.set(ws, session)
-    log("Terminal session created", "terminal")
-    startPingInterval();
+    sessions.set(ws, session);
+    log("Terminal session created", "terminal");
+
+    // Start sending pings to keep connection alive
+    startIntervals();
 
     ptyProcess.onData((data) => {
       try {
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(data)
+          ws.send(data);
         }
       } catch (ex) {
-        log(`Error sending terminal data: ${ex}`, "terminal")
+        log(`Error sending terminal data: ${ex}`, "terminal");
         cleanupSession(ws);
       }
-    })
+    });
 
     ptyProcess.onExit(({ exitCode, signal }) => {
-      log(`Terminal process exited with code ${exitCode} and signal ${signal}`, "terminal")
-      cleanupSession(ws)
-    })
+      log(`Terminal process exited with code ${exitCode} and signal ${signal}`, "terminal");
+      cleanupSession(ws);
+    });
 
     ws.on("message", (data) => {
       try {
-        const message = data.toString()
+        const message = data.toString();
         if (message.startsWith("{")) {
-          const parsed = JSON.parse(message)
+          const parsed = JSON.parse(message);
           if (parsed.type === "resize") {
-            ptyProcess.resize(parsed.cols, parsed.rows)
-            log(`Terminal resized to ${parsed.cols}x${parsed.rows}`, "terminal")
+            ptyProcess.resize(parsed.cols, parsed.rows);
+            log(`Terminal resized to ${parsed.cols}x${parsed.rows}`, "terminal");
           }
         } else {
-          ptyProcess.write(message)
+          ptyProcess.write(message);
         }
       } catch (ex) {
-        log(`Error handling terminal message: ${ex}`, "terminal")
+        log(`Error handling terminal message: ${ex}`, "terminal");
         cleanupSession(ws);
       }
-    })
+    });
 
     ws.on("error", (error) => {
-      log(`WebSocket error: ${error}`, "terminal")
-      cleanupSession(ws)
-    })
+      log(`WebSocket error: ${error}`, "terminal");
+      cleanupSession(ws);
+    });
 
     ws.on("close", () => {
-      log("Terminal WebSocket closed", "terminal")
-      cleanupSession(ws)
-    })
+      log("Terminal WebSocket closed", "terminal");
+      cleanupSession(ws);
+    });
 
     // Send initial greeting
-    ptyProcess.write('echo "Terminal session started"\r')
+    ptyProcess.write('echo "Terminal session started"\r');
   } catch (error) {
-    log(`Failed to create terminal session: ${error}`, "terminal")
+    log(`Failed to create terminal session: ${error}`, "terminal");
     if (ws.readyState === WebSocket.OPEN) {
-      ws.close()
+      ws.close();
     }
   }
 }

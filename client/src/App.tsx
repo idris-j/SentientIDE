@@ -10,11 +10,14 @@ import { ThemeProvider } from '@/lib/theme-context';
 import { FileProvider } from '@/lib/file-context';
 import { LandingPage } from '@/components/LandingPage';
 import { CommandPalette } from '@/components/CommandPalette';
+import { useState } from 'react';
 
 function IDELayout() {
+  const [showTerminal, setShowTerminal] = useState(false);
+
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
-      <MenuBar />
+      <MenuBar onToggleTerminal={() => setShowTerminal(prev => !prev)} />
       <CommandPalette />
       <div className="flex-1 relative">
         <ResizablePanelGroup 
@@ -25,7 +28,7 @@ function IDELayout() {
             defaultSize={20} 
             minSize={15} 
             maxSize={25}
-            className="bg-sidebar p-2"
+            className="bg-sidebar-background p-2"
           >
             <Sidebar />
           </ResizablePanel>
@@ -34,11 +37,29 @@ function IDELayout() {
 
           <ResizablePanel 
             defaultSize={50}
-            className="bg-editor-bg"
+            className="bg-editor-bg flex flex-col"
           >
-            <div className="h-full flex flex-col">
-              <TabsView />
-            </div>
+            <TabsView />
+            <ResizablePanelGroup direction="vertical">
+              <ResizablePanel defaultSize={70}>
+                <CodeEditor />
+              </ResizablePanel>
+
+              {showTerminal && (
+                <>
+                  <ResizableHandle withHandle className="bg-border" />
+                  <ResizablePanel
+                    defaultSize={30}
+                    minSize={20}
+                    className="bg-background"
+                  >
+                    <div id="terminal-panel" className="w-full h-full">
+                      <Terminal className="w-full h-full p-2" />
+                    </div>
+                  </ResizablePanel>
+                </>
+              )}
+            </ResizablePanelGroup>
           </ResizablePanel>
 
           <ResizableHandle withHandle className="bg-border" />
