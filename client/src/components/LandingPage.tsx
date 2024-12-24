@@ -21,10 +21,29 @@ export function LandingPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const handleLaunchIDE = () => {
+    if (user) {
+      setLocation('/editor');
+    } else {
+      setLocation('/auth');
+    }
+  };
+
   const scrollToSection = (sectionId: string) => {
+    console.log(`Attempting to scroll to section: ${sectionId}`);
     const element = document.getElementById(sectionId);
     if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+      console.log(`Found element with id: ${sectionId}, scrolling...`);
+      const headerOffset = 80; // Account for fixed header
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth"
+      });
+    } else {
+      console.warn(`Element with id: ${sectionId} not found`);
     }
     setIsMenuOpen(false);
   };
@@ -62,22 +81,14 @@ export function LandingPage() {
     }
   ];
 
-  const handleLaunchIDE = () => {
-    if (user) {
-      setLocation('/editor');
-    } else {
-      setLocation('/auth');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background text-foreground overflow-hidden">
       {/* Header */}
       <header className={`fixed top-0 w-full z-50 transition-all duration-200 ${isScrolled ? 'bg-background/95 backdrop-blur-sm border-b' : ''}`}>
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
-            <Link href="/">
-              <a className="text-xl font-bold">AI IDE</a>
+            <Link href="/" className="text-xl font-bold">
+              AI IDE
             </Link>
 
             {/* Desktop Navigation */}
