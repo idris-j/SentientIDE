@@ -25,12 +25,12 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Add logging middleware
+// Add logging middleware for debugging auth issues
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
     const duration = Date.now() - start;
-    console.log(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
+    console.log(`${req.method} ${req.path} ${res.statusCode} ${duration}ms ${req.headers.origin || 'no-origin'}`);
   });
   next();
 });
@@ -38,12 +38,13 @@ app.use((req, res, next) => {
 // Initialize authentication before routes
 setupAuth(app);
 
-// Error handling middleware
+// Error handling middleware with better error details
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Server error:', err);
   const status = err.status || err.statusCode || 500;
   const message = err.message || "Internal Server Error";
-  res.status(status).json({ error: message });
+  const details = process.env.NODE_ENV === 'development' ? err.stack : undefined;
+  res.status(status).json({ error: message, details });
 });
 
 // Initialize server

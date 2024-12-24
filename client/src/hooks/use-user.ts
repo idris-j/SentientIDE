@@ -30,6 +30,9 @@ async function handleRequest(
       mode: "cors"
     });
 
+    // Log response for debugging
+    console.log(`${method} ${url} response:`, response.status);
+
     if (!response.ok) {
       if (response.status >= 500) {
         return { ok: false, message: response.statusText };
@@ -41,6 +44,7 @@ async function handleRequest(
 
     return { ok: true };
   } catch (e: any) {
+    console.error('Request error:', e);
     return { ok: false, message: e.toString() };
   }
 }
