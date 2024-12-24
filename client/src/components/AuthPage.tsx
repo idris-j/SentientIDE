@@ -3,8 +3,8 @@ import { useUser } from "@/hooks/use-user";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowRight, ArrowLeft } from "lucide-react";
-import { useLocation } from "wouter";
+import { Loader2, ArrowRight } from "lucide-react";
+import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 
 type FormData = {
@@ -62,7 +62,6 @@ export function AuthPage() {
         return;
       }
 
-      // Only redirect after successful authentication
       setLocation("/editor");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -96,9 +95,9 @@ export function AuthPage() {
       <Card className="w-full max-w-md mx-4">
         <CardContent className="pt-6">
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-2xl font-bold">
-              {isLogin ? "Welcome back!" : "Create an account"}
-            </h1>
+            <Link href="/" className="text-xl font-bold hover:text-primary transition-colors">
+              AI IDE
+            </Link>
             <Button
               variant="ghost"
               onClick={() => {

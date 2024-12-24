@@ -7,7 +7,7 @@ const app = express();
 
 // CORS middleware must be first
 app.use((req, res, next) => {
-  const allowedOrigins = ['http://localhost:5000', 'http://localhost:3000'];
+  const allowedOrigins = ['http://localhost:5000', 'http://localhost:3000', 'https://advanced-ai-ide.replit.app'];
   const origin = req.headers.origin;
   if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);

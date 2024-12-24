@@ -30,9 +30,6 @@ async function handleRequest(
       mode: "cors"
     });
 
-    // Log response for debugging
-    console.log(`${method} ${url} response:`, response.status);
-
     if (!response.ok) {
       if (response.status >= 500) {
         return { ok: false, message: response.statusText };
@@ -42,6 +39,8 @@ async function handleRequest(
       return { ok: false, message };
     }
 
+    // Wait for the session to be properly set
+    await new Promise(resolve => setTimeout(resolve, 100));
     return { ok: true };
   } catch (e: any) {
     console.error('Request error:', e);
