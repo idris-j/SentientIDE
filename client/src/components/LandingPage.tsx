@@ -93,9 +93,9 @@ export function LandingPage() {
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center space-x-8">
-              <button onClick={() => scrollToSection('features')} className="text-sm hover:text-primary">Features</button>
-              <button onClick={() => scrollToSection('preview')} className="text-sm hover:text-primary">Preview</button>
-              <button onClick={() => scrollToSection('cta')} className="text-sm hover:text-primary">Get Started</button>
+              <Link href="#features" className="text-sm hover:text-primary">Features</Link>
+              <Link href="#preview" className="text-sm hover:text-primary">Preview</Link>
+              <Link href="#cta" className="text-sm hover:text-primary">Get Started</Link>
               <Button onClick={handleLaunchIDE} disabled={isLoading}>
                 {isLoading ? (
                   <>
