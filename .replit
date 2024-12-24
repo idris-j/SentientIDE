@@ -55,6 +55,7 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run dev"
+waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Database Migrations"

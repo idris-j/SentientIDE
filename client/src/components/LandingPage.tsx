@@ -1,13 +1,33 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { Code2, Command, Terminal, GitBranch, Settings, Share2, Zap, Loader2 } from "lucide-react";
+import { Code2, Command, Terminal, GitBranch, Settings, Share2, Zap, Loader2, Menu, X } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
 import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
 
 export function LandingPage() {
   const { user, isLoading } = useUser();
   const [, setLocation] = useLocation();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+    setIsMenuOpen(false);
+  };
 
   const features = [
     { 
@@ -52,34 +72,110 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-hidden">
-      {/* Hero Section */}
-      <div className="relative">
-        {/* Floating Elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(5)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute bg-primary/10 rounded-full"
-              style={{
-                width: Math.random() * 300 + 100,
-                height: Math.random() * 300 + 100,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-              }}
-              animate={{
-                y: [0, 30, 0],
-                opacity: [0.5, 0.8, 0.5],
-              }}
-              transition={{
-                duration: 5 + Math.random() * 3,
-                repeat: Infinity,
-                delay: i * 0.7,
-              }}
-            />
-          ))}
-        </div>
+      {/* Header */}
+      <header className={`fixed top-0 w-full z-50 transition-all duration-200 ${isScrolled ? 'bg-background/95 backdrop-blur-sm border-b' : ''}`}>
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/">
+              <a className="text-xl font-bold">AI IDE</a>
+            </Link>
 
-        <div className="relative px-6 lg:px-8 pt-20 pb-32 sm:pt-48 sm:pb-40">
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center space-x-8">
+              <button onClick={() => scrollToSection('features')} className="text-sm hover:text-primary">Features</button>
+              <button onClick={() => scrollToSection('preview')} className="text-sm hover:text-primary">Preview</button>
+              <button onClick={() => scrollToSection('cta')} className="text-sm hover:text-primary">Get Started</button>
+              <Button onClick={handleLaunchIDE} disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Launch IDE'
+                )}
+              </Button>
+            </nav>
+
+            {/* Mobile Menu Button */}
+            <button
+              className="md:hidden p-2"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              {isMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </button>
+          </div>
+
+          {/* Mobile Navigation */}
+          {isMenuOpen && (
+            <div className="md:hidden py-4 space-y-4">
+              <button
+                onClick={() => scrollToSection('features')}
+                className="block w-full text-left px-4 py-2 hover:bg-accent rounded-lg"
+              >
+                Features
+              </button>
+              <button
+                onClick={() => scrollToSection('preview')}
+                className="block w-full text-left px-4 py-2 hover:bg-accent rounded-lg"
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => scrollToSection('cta')}
+                className="block w-full text-left px-4 py-2 hover:bg-accent rounded-lg"
+              >
+                Get Started
+              </button>
+              <div className="px-4">
+                <Button onClick={handleLaunchIDE} className="w-full" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    'Launch IDE'
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <div className="relative pt-16">
+        <div id="hero" className="relative px-6 lg:px-8 pt-20 pb-32 sm:pt-48 sm:pb-40">
+          {/* Floating Elements */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {[...Array(5)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute bg-primary/10 rounded-full"
+                style={{
+                  width: Math.random() * 300 + 100,
+                  height: Math.random() * 300 + 100,
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                }}
+                animate={{
+                  y: [0, 30, 0],
+                  opacity: [0.5, 0.8, 0.5],
+                }}
+                transition={{
+                  duration: 5 + Math.random() * 3,
+                  repeat: Infinity,
+                  delay: i * 0.7,
+                }}
+              />
+            ))}
+          </div>
+
           <div className="mx-auto max-w-3xl text-center">
             <motion.h1 
               className="text-4xl font-bold tracking-tight sm:text-6xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/50"
@@ -131,6 +227,7 @@ export function LandingPage() {
 
       {/* Interface Preview */}
       <motion.div 
+        id="preview"
         className="relative mx-auto max-w-7xl px-6 lg:px-8 py-20"
         initial={{ opacity: 0, y: 40 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -188,7 +285,7 @@ export function LandingPage() {
       </motion.div>
 
       {/* Features Grid */}
-      <div className="py-24 sm:py-32">
+      <div id="features" className="py-24 sm:py-32">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/50">
@@ -220,7 +317,7 @@ export function LandingPage() {
       </div>
 
       {/* Call to Action */}
-      <div className="relative py-24">
+      <div id="cta" className="relative py-24">
         <div className="absolute inset-0 bg-primary/5 backdrop-blur-sm" />
         <div className="relative mx-auto max-w-7xl px-6 lg:px-8 flex flex-col items-center text-center">
           <motion.h2 
@@ -248,11 +345,9 @@ export function LandingPage() {
             transition={{ duration: 0.8, delay: 0.4 }}
             viewport={{ once: true }}
           >
-            <Link href="/editor">
-              <Button size="lg" className="px-8">
-                Get Started
-              </Button>
-            </Link>
+            <Button size="lg" className="px-8" onClick={handleLaunchIDE}>
+              Get Started
+            </Button>
           </motion.div>
         </div>
       </div>
