@@ -30,7 +30,7 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
     const duration = Date.now() - start;
-    console.log(`${req.method} ${req.path} ${res.statusCode} ${duration}ms ${req.headers.origin || 'no-origin'}`);
+    console.log(`${req.method} ${req.path} ${res.statusCode} ${duration}ms ${req.headers.origin || 'no-origin'} ${req.cookies?.connect?.sid ? 'has-session' : 'no-session'}`);
   });
   next();
 });

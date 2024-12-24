@@ -46,8 +46,9 @@ export function AuthPage() {
   const { login, register } = useUser();
   const [, setLocation] = useLocation();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
+    if (isLoading) return;
+
     setError(null);
     setIsLoading(true);
 
@@ -57,13 +58,14 @@ export function AuthPage() {
 
       if (!result.ok) {
         setError(result.message);
+        setIsLoading(false);
         return;
       }
 
+      // Only redirect after successful authentication
       setLocation("/editor");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -72,7 +74,7 @@ export function AuthPage() {
     if (currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
-      handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+      handleSubmit();
     }
   };
 
@@ -137,6 +139,7 @@ export function AuthPage() {
                     onKeyDown={handleKeyDown}
                     className="text-lg py-6"
                     autoFocus
+                    disabled={isLoading}
                   />
                 </div>
               </motion.div>

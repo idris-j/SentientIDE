@@ -118,15 +118,15 @@ export function setupAuth(app: Express) {
     try {
       const { username, password } = req.body;
       if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password are required' });
+        return res.status(400).json({ ok: false, message: 'Username and password are required' });
       }
 
       if (username.length < 3 || username.length > 50) {
-        return res.status(400).json({ error: 'Username must be between 3 and 50 characters' });
+        return res.status(400).json({ ok: false, message: 'Username must be between 3 and 50 characters' });
       }
 
       if (password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+        return res.status(400).json({ ok: false, message: 'Password must be at least 6 characters' });
       }
 
       // Check if user already exists
@@ -137,7 +137,7 @@ export function setupAuth(app: Express) {
         .limit(1);
 
       if (existingUser) {
-        return res.status(400).json({ error: 'Username already exists' });
+        return res.status(400).json({ ok: false, message: 'Username already exists' });
       }
 
       // Hash the password
@@ -155,16 +155,15 @@ export function setupAuth(app: Express) {
       // Remove password from the response
       const { password: _, ...userWithoutPassword } = newUser;
 
-      // Log the user in after registration
-      req.login(userWithoutPassword, (err) => {
-        if (err) {
-          return next(err);
-        }
-        return res.json({
-          message: "Registration successful",
-          user: userWithoutPassword,
+      // Use a promise to handle login to ensure proper async handling
+      await new Promise<void>((resolve, reject) => {
+        req.logIn(userWithoutPassword, (err) => {
+          if (err) reject(err);
+          else resolve();
         });
       });
+
+      return res.json({ ok: true });
     } catch (error) {
       next(error);
     }
@@ -173,38 +172,47 @@ export function setupAuth(app: Express) {
   app.post("/api/login", (req, res, next) => {
     const { username, password } = req.body;
     if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
+      return res.status(400).json({ ok: false, message: 'Username and password are required' });
     }
 
-    passport.authenticate("local", (err: any, user: Express.User | false, info: IVerifyOptions) => {
+    passport.authenticate("local", async (err: any, user: Express.User | false, info: IVerifyOptions) => {
       if (err) {
         return next(err);
       }
 
       if (!user) {
-        return res.status(400).json({ error: info.message ?? "Login failed" });
+        return res.status(400).json({ ok: false, message: info.message ?? "Login failed" });
       }
 
-      req.logIn(user, (err) => {
-        if (err) {
-          return next(err);
-        }
-
-        return res.json({
-          message: "Login successful",
-          user,
+      try {
+        // Use a promise to handle login to ensure proper async handling
+        await new Promise<void>((resolve, reject) => {
+          req.logIn(user, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
         });
-      });
+
+        // Update last login time and return response
+        await db
+          .update(users)
+          .set({ lastLogin: new Date() })
+          .where(eq(users.id, user.id));
+
+        return res.json({ ok: true });
+      } catch (error) {
+        return next(error);
+      }
     })(req, res, next);
   });
 
   app.post("/api/logout", (req, res) => {
     req.logout((err) => {
       if (err) {
-        return res.status(500).json({ error: 'Logout failed' });
+        return res.status(500).json({ ok: false, message: 'Logout failed' });
       }
 
-      res.json({ message: "Logout successful" });
+      res.json({ ok: true });
     });
   });
 
@@ -212,6 +220,6 @@ export function setupAuth(app: Express) {
     if (req.isAuthenticated()) {
       return res.json(req.user);
     }
-    res.status(401).json({ error: 'Not logged in' });
+    res.status(401).json({ ok: false, message: 'Not logged in' });
   });
 }
