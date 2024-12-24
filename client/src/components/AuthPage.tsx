@@ -1,22 +1,48 @@
 import { useState } from "react";
 import { useUser } from "@/hooks/use-user";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowRight, ArrowLeft } from "lucide-react";
 import { useLocation } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
 
 type FormData = {
   username: string;
   password: string;
 };
 
+type Step = {
+  id: number;
+  title: string;
+  field: keyof FormData;
+  type: string;
+  placeholder: string;
+};
+
+const steps: Step[] = [
+  {
+    id: 1,
+    title: "What's your username?",
+    field: "username",
+    type: "text",
+    placeholder: "Enter your username",
+  },
+  {
+    id: 2,
+    title: "Choose a password",
+    field: "password",
+    type: "password",
+    placeholder: "Enter your password",
+  },
+];
+
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({ username: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
   const { login, register } = useUser();
   const [, setLocation] = useLocation();
 
@@ -42,67 +68,120 @@ export function AuthPage() {
     }
   };
 
+  const handleNext = () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(prev => prev + 1);
+    } else {
+      handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 0) {
+      setCurrentStep(prev => prev - 1);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleNext();
+    }
+  };
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background">
       <Card className="w-full max-w-md mx-4">
-        <CardHeader>
-          <CardTitle>{isLogin ? "Login" : "Register"}</CardTitle>
-          <CardDescription>
-            {isLogin
-              ? "Sign in to access your workspace"
-              : "Create an account to get started"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                required
-                value={formData.username}
-                onChange={(e) =>
-                  setFormData({ ...formData, username: e.target.value })
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-              />
-            </div>
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
+        <CardContent className="pt-6">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-2xl font-bold">
+              {isLogin ? "Welcome back!" : "Create an account"}
+            </h1>
             <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
+              variant="ghost"
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setCurrentStep(0);
+                setFormData({ username: "", password: "" });
+                setError(null);
+              }}
+            >
+              {isLogin ? "Need an account?" : "Already have an account?"}
+            </Button>
+          </div>
+
+          <div className="relative">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentStep}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-6"
+              >
+                <div className="space-y-2">
+                  <h2 className="text-xl font-medium">
+                    {steps[currentStep].title}
+                  </h2>
+                  <Input
+                    type={steps[currentStep].type}
+                    placeholder={steps[currentStep].placeholder}
+                    value={formData[steps[currentStep].field]}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        [steps[currentStep].field]: e.target.value,
+                      })
+                    }
+                    onKeyDown={handleKeyDown}
+                    className="text-lg py-6"
+                    autoFocus
+                  />
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {error && (
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-sm text-destructive mt-4"
+            >
+              {error}
+            </motion.p>
+          )}
+
+          <div className="flex justify-between mt-8">
+            <Button
+              variant="outline"
+              onClick={handleBack}
+              disabled={currentStep === 0 || isLoading}
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+            <Button
+              onClick={handleNext}
+              disabled={!formData[steps[currentStep].field] || isLoading}
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                isLogin ? "Login" : "Register"
+                <>
+                  {currentStep === steps.length - 1 ? (
+                    isLogin ? "Login" : "Sign Up"
+                  ) : (
+                    <>
+                      Next
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </>
               )}
             </Button>
-            <Button
-              type="button"
-              variant="link"
-              className="w-full"
-              onClick={() => setIsLogin(!isLogin)}
-            >
-              {isLogin
-                ? "Don't have an account? Register"
-                : "Already have an account? Login"}
-            </Button>
-          </form>
+          </div>
         </CardContent>
       </Card>
     </div>

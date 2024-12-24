@@ -21,9 +21,13 @@ async function handleRequest(
   try {
     const response = await fetch(url, {
       method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        "Accept": "application/json"
+      },
       body: body ? JSON.stringify(body) : undefined,
       credentials: "include",
+      mode: "cors"
     });
 
     if (!response.ok) {
@@ -43,7 +47,11 @@ async function handleRequest(
 
 async function fetchUser(): Promise<User | null> {
   const response = await fetch('/api/user', {
-    credentials: 'include'
+    credentials: 'include',
+    mode: 'cors',
+    headers: {
+      "Accept": "application/json"
+    }
   });
 
   if (!response.ok) {

@@ -44,8 +44,8 @@ export function setupAuth(app: Express) {
     saveUninitialized: false,
     cookie: {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
-      secure: app.get("env") === "production",
-      sameSite: "lax",
+      secure: false, // Set to false for development
+      sameSite: 'lax',
       path: "/"
     },
     store: new MemoryStore({
@@ -61,18 +61,6 @@ export function setupAuth(app: Express) {
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
-
-  // CORS middleware
-  app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(200);
-    }
-    next();
-  });
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {

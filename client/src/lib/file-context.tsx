@@ -26,7 +26,14 @@ export function FileProvider({ children }: { children: React.ReactNode }) {
   const addFile = async (path: string) => {
     try {
       // Check if file exists first
-      const checkResponse = await fetch(`/api/files/exists?path=${encodeURIComponent(path)}`);
+      const checkResponse = await fetch(`/api/files/exists?path=${encodeURIComponent(path)}`, {
+        credentials: 'include'
+      });
+
+      if (!checkResponse.ok) {
+        throw new Error('Failed to check file existence');
+      }
+
       const exists = await checkResponse.json();
 
       if (!exists) {
@@ -37,6 +44,7 @@ export function FileProvider({ children }: { children: React.ReactNode }) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ path, content: '' }),
+          credentials: 'include'
         });
 
         if (!response.ok) {
@@ -73,6 +81,9 @@ export function FileProvider({ children }: { children: React.ReactNode }) {
           monaco.editor.createModel('', language, uri);
         }
       }
+
+      // Trigger file tree refresh
+      window.dispatchEvent(new CustomEvent('refresh-files'));
     } catch (error) {
       console.error('Error adding file:', error);
       throw error;
@@ -97,11 +108,15 @@ export function FileProvider({ children }: { children: React.ReactNode }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ path, content }),
+        credentials: 'include'
       });
 
       if (!response.ok) {
         throw new Error('Failed to save file');
       }
+
+      // Trigger file tree refresh after save
+      window.dispatchEvent(new CustomEvent('refresh-files'));
     } catch (error) {
       console.error('Error saving file:', error);
       throw error;

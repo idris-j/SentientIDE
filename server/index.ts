@@ -4,26 +4,33 @@ import { setupVite, serveStatic } from "./vite";
 import { setupAuth } from "./auth";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
 
-// CORS middleware
-app.use((_req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:5000');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  res.header('Access-Control-Allow-Credentials', 'true');
+// CORS middleware must be first
+app.use((req, res, next) => {
+  const allowedOrigins = ['http://localhost:5000', 'http://localhost:3000'];
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
   next();
 });
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 // Add logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (req.path.startsWith("/api")) {
-      console.log(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
-    }
+    console.log(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
   });
   next();
 });
